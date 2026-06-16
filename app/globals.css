@@ -6,19 +6,21 @@
 
 /* html5-qrcode internal elements — suppress default UI, force video to fill container */
 #qr-shaded-region { display: none !important; }
-#scanner-hero canvas { display: none !important; }
+/* Keep canvas in layout (opacity:0) so html5-qrcode can read its dimensions for QR detection */
+#scanner-hero canvas {
+  position: absolute !important;
+  inset: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
 #scanner-hero video {
   position: absolute !important;
   inset: 0 !important;
   width: 100% !important;
   height: 100% !important;
   object-fit: cover !important;
-}
-#scanner-hero > div {
-  position: absolute !important;
-  inset: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
+  z-index: 1 !important;
 }
 html, body { margin: 0; padding: 0; background: #000; }
 body { -webkit-font-smoothing: antialiased; }
