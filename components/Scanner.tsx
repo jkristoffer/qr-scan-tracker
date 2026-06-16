@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import jsQR from 'jsqr';
 import { db } from '@/lib/supabase';
 import { ScanResult } from '@/lib/types';
 
@@ -14,60 +14,86 @@ interface ScannerProps {
 type CamStatus = 'idle' | 'loading' | 'live' | 'denied';
 
 export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const isRunning = useRef(false);
-  const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rafRef = useRef<number>(0);
+  const pausedRef = useRef(false);
   const [camStatus, setCamStatus] = useState<CamStatus>('idle');
-  const [camError, setCamError] = useState<string>('');
+  const [camError, setCamError] = useState('');
 
   useEffect(() => {
-    startScanning();
-    return () => {
-      if (resumeTimer.current) clearTimeout(resumeTimer.current);
-      if (scannerRef.current && isRunning.current) {
-        isRunning.current = false;
-        scannerRef.current.stop().catch(() => {});
+    let stream: MediaStream | null = null;
+
+    const start = async () => {
+      setCamStatus('loading');
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false,
+        });
+        const video = videoRef.current;
+        if (!video) return;
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+        await video.play();
+        setCamStatus('live');
+        scanLoop();
+      } catch (err: any) {
+        setCamError(String(err?.message || err));
+        setCamStatus('denied');
       }
+    };
+
+    const scanLoop = () => {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas || video.readyState < 2) {
+        rafRef.current = requestAnimationFrame(scanLoop);
+        return;
+      }
+      if (pausedRef.current) {
+        rafRef.current = requestAnimationFrame(scanLoop);
+        return;
+      }
+
+      const w = video.videoWidth;
+      const h = video.videoHeight;
+      if (!w || !h) {
+        rafRef.current = requestAnimationFrame(scanLoop);
+        return;
+      }
+
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) { rafRef.current = requestAnimationFrame(scanLoop); return; }
+
+      ctx.drawImage(video, 0, 0, w, h);
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
+
+      if (code?.data) {
+        pausedRef.current = true;
+        processScan(code.data).then(result => {
+          onScanComplete(result);
+          setTimeout(() => { pausedRef.current = false; }, 1800);
+        }).catch(() => {
+          onScanComplete({ success: false, message: 'Scan error', type: 'not_found' });
+          setTimeout(() => { pausedRef.current = false; }, 1800);
+        });
+      }
+
+      rafRef.current = requestAnimationFrame(scanLoop);
+    };
+
+    start();
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      stream?.getTracks().forEach(t => t.stop());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const startScanning = async () => {
-    setCamStatus('loading');
-    try {
-      const scanner = new Html5Qrcode('scanner-hero');
-      scannerRef.current = scanner;
-      await scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10 },
-        async (decodedText) => {
-          try { scanner.pause(); } catch {}
-          try {
-            const result = await processScan(decodedText);
-            onScanComplete(result);
-          } catch {
-            onScanComplete({ success: false, message: 'Scan error', type: 'not_found' });
-          }
-          resumeTimer.current = setTimeout(() => {
-            if (isRunning.current) { try { scanner.resume(); } catch {} }
-          }, 1800);
-        },
-        () => {}
-      );
-      isRunning.current = true;
-      setCamStatus('live');
-    } catch (err: any) {
-      setCamError(String(err?.message || err || 'Unknown error'));
-      setCamStatus('denied');
-    }
-  };
-
-  const handleRetry = () => {
-    if (scannerRef.current && isRunning.current) return;
-    setCamStatus('idle');
-    setCamError('');
-    startScanning();
-  };
 
   const processScan = async (barcode: string): Promise<ScanResult> => {
     const item = await db.getItemByBarcode(sessionId, barcode);
@@ -75,7 +101,7 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
     if (item.scanned) {
       return {
         success: false, item,
-        message: `Already checked in by ${item.scanned_by} at ${new Date(item.scanned_at || '').toLocaleTimeString()}`,
+        message: `Already checked in by ${item.scanned_by}`,
         type: 'duplicate',
       };
     }
@@ -87,17 +113,27 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
     return { success: true, item: scanned, message: scanned.name, type: 'success' };
   };
 
+  const handleRetry = () => {
+    setCamStatus('idle');
+    setCamError('');
+    // Remount by reloading — simplest retry path
+    window.location.reload();
+  };
+
   return (
-    <div
-      style={{ position: 'relative', flex: hidden ? '0 0 0' : '1.35', minHeight: hidden ? 0 : 230, height: hidden ? 0 : undefined, background: '#0b0b0d', overflow: 'hidden' }}
-    >
-      {/* html5-qrcode renders video inside this div */}
-      <div id="scanner-hero" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+    <div style={{ position: 'relative', flex: hidden ? '0 0 0' : '1.35', minHeight: hidden ? 0 : 230, height: hidden ? 0 : undefined, background: '#0b0b0d', overflow: 'hidden' }}>
+      <video
+        ref={videoRef}
+        muted
+        playsInline
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+      />
+      {/* Canvas is off-screen — used only for QR frame capture */}
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
 
       {/* Vignette */}
       <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at center, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 100%)', pointerEvents: 'none' }} />
 
-      {/* Camera denied / loading */}
       {camStatus === 'denied' && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 28, textAlign: 'center' }}>
           <div style={{ width: 52, height: 52, borderRadius: '50%', border: '2px solid #5a5a5e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, color: '#9a9a9e' }}>⃠</div>
@@ -107,10 +143,7 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
           ) : (
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#8a8a8e', maxWidth: 230 }}>Allow camera access in Settings, then tap Retry.</div>
           )}
-          <div
-            onClick={handleRetry}
-            style={{ marginTop: 6, padding: '10px 24px', background: '#fff', color: '#161618', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-          >
+          <div onClick={handleRetry} style={{ marginTop: 6, padding: '10px 24px', background: '#fff', color: '#161618', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
             Retry
           </div>
         </div>
@@ -121,7 +154,6 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
         </div>
       )}
 
-      {/* Reticle (shown when live) */}
       {camStatus === 'live' && (
         <>
           <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 210, height: 158, pointerEvents: 'none' }}>

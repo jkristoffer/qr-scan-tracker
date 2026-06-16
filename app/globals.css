@@ -4,19 +4,6 @@
 
 *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-/* Hide html5-qrcode's scan region overlay — we use our own reticle */
-#qr-shaded-region { display: none !important; }
-/* Force html5-qrcode's wrapper div and video to fill the full scanner container.
-   Without this the video sizes to its natural 16:9 ratio, leaving dead space in portrait. */
-#scanner-hero > div {
-  position: absolute !important;
-  inset: 0 !important;
-}
-#scanner-hero video {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-}
 html, body { margin: 0; padding: 0; background: #000; }
 body { -webkit-font-smoothing: antialiased; }
 ::-webkit-scrollbar { width: 0; height: 0; }
