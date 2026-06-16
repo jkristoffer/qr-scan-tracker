@@ -6,10 +6,13 @@
 
 /* Hide html5-qrcode's scan region overlay — we use our own reticle */
 #qr-shaded-region { display: none !important; }
-/* Make the camera video fill the scanner container in all orientations */
-#scanner-hero video {
+/* Force html5-qrcode's wrapper div and video to fill the full scanner container.
+   Without this the video sizes to its natural 16:9 ratio, leaving dead space in portrait. */
+#scanner-hero > div {
   position: absolute !important;
   inset: 0 !important;
+}
+#scanner-hero video {
   width: 100% !important;
   height: 100% !important;
   object-fit: cover !important;
