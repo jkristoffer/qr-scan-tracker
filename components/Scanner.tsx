@@ -37,7 +37,7 @@ export function Scanner({ sessionId, onScanComplete }: ScannerProps) {
       scannerRef.current = scanner;
       await scanner.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 210, height: 158 } },
+        { fps: 10 },
         async (decodedText) => {
           try { scanner.pause(); } catch {}
           try {
