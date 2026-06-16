@@ -12,6 +12,7 @@ interface GuestCard {
 }
 
 type Tab = 'active' | 'removed';
+type TallyFilter = 'total' | 'checked_in' | 'pending';
 
 function nextTicketCode(items: Item[]): string {
   let max = 0;
@@ -52,6 +53,7 @@ export default function ManagePage() {
   const [cards, setCards] = useState<GuestCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('active');
+  const [tallyFilter, setTallyFilter] = useState<TallyFilter>('total');
   const [addName, setAddName] = useState('');
   const [adding, setAdding] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<GuestCard | null>(null);
@@ -135,8 +137,18 @@ export default function ManagePage() {
   const checkedIn = cards.filter(c => c.item.scanned).length;
   const unscanned = activeCards.filter(c => !c.item.scanned).length;
 
-  const displayActive = sortedActive(activeCards, pinnedId);
+  const filteredActive = tallyFilter === 'checked_in'
+    ? activeCards.filter(c => c.item.scanned)
+    : tallyFilter === 'pending'
+    ? activeCards.filter(c => !c.item.scanned)
+    : activeCards;
+
+  const displayActive = sortedActive(filteredActive, pinnedId);
   const displayRemoved = sortedRemoved(removedCards);
+
+  const handleTallyClick = (f: TallyFilter) => {
+    setTallyFilter(prev => (prev === f && f !== 'total') ? 'total' : f);
+  };
 
   return (
     <div style={{ minHeight: '100vh', background: '#fbfbfa', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", color: '#161618' }}>
@@ -155,16 +167,27 @@ export default function ManagePage() {
 
         {/* Tally row */}
         <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-          {[
-            { label: 'TOTAL', value: totalActive },
-            { label: 'CHECKED IN', value: checkedIn },
-            { label: 'UNSCANNED', value: unscanned },
-          ].map(({ label, value }) => (
-            <div key={label} style={{ flex: 1, background: '#f4f4f2', borderRadius: 10, padding: '9px 10px' }}>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.14em', color: '#9a9a96' }}>{label}</div>
-              <div style={{ fontSize: 20, fontWeight: 700, marginTop: 2 }}>{value}</div>
-            </div>
-          ))}
+          {([
+            { label: 'TOTAL', value: totalActive, filter: 'total' as TallyFilter },
+            { label: 'CHECKED IN', value: checkedIn, filter: 'checked_in' as TallyFilter },
+            { label: 'PENDING', value: unscanned, filter: 'pending' as TallyFilter },
+          ]).map(({ label, value, filter }) => {
+            const active = tallyFilter === filter;
+            return (
+              <div
+                key={label}
+                onClick={() => handleTallyClick(filter)}
+                style={{
+                  flex: 1, borderRadius: 10, padding: '9px 10px', cursor: 'pointer',
+                  background: active ? '#161618' : '#f4f4f2',
+                  transition: 'background 0.15s',
+                }}
+              >
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.14em', color: active ? '#9a9a94' : '#9a9a96' }}>{label}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, marginTop: 2, color: active ? '#fff' : '#161618' }}>{value}</div>
+              </div>
+            );
+          })}
         </div>
 
         {/* Tabs */}
@@ -172,7 +195,7 @@ export default function ManagePage() {
           {(['active', 'removed'] as Tab[]).map(t => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => { setTab(t); setTallyFilter('total'); }}
               style={{
                 padding: '7px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
                 fontSize: 13, fontWeight: 600,
