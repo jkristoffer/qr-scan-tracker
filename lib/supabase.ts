@@ -173,4 +173,27 @@ export const db = {
       )
       .subscribe();
   },
+
+  joinPresence(sessionId: string, gateName: string) {
+    const channel = getClient().channel(`presence:${sessionId}`, {
+      config: { presence: { key: gateName } },
+    });
+    channel.subscribe(async (status: string) => {
+      if (status === 'SUBSCRIBED') {
+        await channel.track({ gate_name: gateName, joined_at: Date.now() });
+      }
+    });
+    return channel;
+  },
+
+  watchPresence(sessionId: string, onChange: (gateNames: string[]) => void) {
+    const channel = getClient().channel(`presence:${sessionId}`);
+    channel.on('presence', { event: 'sync' }, () => {
+      const state = channel.presenceState<{ gate_name: string }>();
+      const names = Object.values(state).flatMap(presences => presences.map(p => p.gate_name));
+      onChange([...new Set(names)]);
+    });
+    channel.subscribe();
+    return channel;
+  },
 };

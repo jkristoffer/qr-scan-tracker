@@ -53,11 +53,17 @@ export default function ManagePage() {
   const [acting, setActing] = useState(false);
   const [pinnedId, setPinnedId] = useState<string | undefined>(undefined);
   const [expandedQr, setExpandedQr] = useState<Set<string>>(new Set());
+  const [activeScanners, setActiveScanners] = useState<string[]>([]);
 
   const toggleQr = (id: string) =>
     setExpandedQr(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   const inputRef = useRef<HTMLInputElement>(null);
   const pinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const channel = db.watchPresence(sessionId, setActiveScanners);
+    return () => { channel.unsubscribe(); };
+  }, [sessionId]);
 
   useEffect(() => {
     const load = async () => {
@@ -156,6 +162,21 @@ export default function ManagePage() {
           <div onClick={() => router.push('/')} style={{ width: 38, height: 38, borderRadius: 10, border: '1px solid #e2e2de', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, cursor: 'pointer', flexShrink: 0 }}>‹</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session?.name}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+              {activeScanners.length === 0 ? (
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: '0.12em', color: '#c2c2be' }}>NO SCANNERS ACTIVE</div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'oklch(0.74 0.17 152)', animation: 'liveDot 1.4s ease-in-out infinite', flexShrink: 0 }} />
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: '0.12em', color: '#6a6a66', fontWeight: 700 }}>{activeScanners.length} ONLINE</span>
+                  </div>
+                  {activeScanners.map(name => (
+                    <div key={name} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: '0.08em', color: '#fff', background: '#161618', borderRadius: 999, padding: '2px 8px' }}>{name}</div>
+                  ))}
+                </>
+              )}
+            </div>
           </div>
           <button onClick={() => window.print()} style={{ flexShrink: 0, padding: '9px 16px', background: '#161618', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
             Print

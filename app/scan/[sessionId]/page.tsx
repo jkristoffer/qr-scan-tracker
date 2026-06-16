@@ -78,6 +78,12 @@ export default function ScannerPage() {
     return () => { channel.unsubscribe(); };
   }, [sessionId, updateItem]);
 
+  useEffect(() => {
+    if (!gateName || gateName === 'This gate') return;
+    const channel = db.joinPresence(sessionId, gateName);
+    return () => { channel.unsubscribe(); };
+  }, [sessionId, gateName]);
+
   const showFlood = useCallback((result: ScanResultFlood) => {
     if (floodTimer.current) clearTimeout(floodTimer.current);
     setFlood(result);
