@@ -144,6 +144,24 @@ export const db = {
     return data;
   },
 
+  async addItem(sessionId: string, name: string, barcode: string) {
+    const { data, error } = await getClient()
+      .from('items')
+      .insert({ session_id: sessionId, name, barcode, scanned: false })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async deleteItem(itemId: string) {
+    const { error } = await getClient()
+      .from('items')
+      .delete()
+      .eq('id', itemId);
+    if (error) throw error;
+  },
+
   async resetSession(sessionId: string) {
     const { data, error } = await getClient()
       .from('items')

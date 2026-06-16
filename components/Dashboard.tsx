@@ -147,10 +147,10 @@ export function Dashboard() {
                       Scan
                     </div>
                     <div
-                      onClick={e => { e.stopPropagation(); router.push(`/qr/${s.id}`); }}
+                      onClick={e => { e.stopPropagation(); router.push(`/manage/${s.id}`); }}
                       style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 38, border: '1px solid #e2e2de', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#161618', cursor: 'pointer', gap: 6 }}
                     >
-                      QR Codes
+                      Manage
                     </div>
                   </div>
                 </div>
