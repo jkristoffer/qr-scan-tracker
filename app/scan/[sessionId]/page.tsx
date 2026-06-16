@@ -45,7 +45,7 @@ export default function ScannerPage() {
   const [gateName, setGateName] = useState('This gate');
   const [isConnected, setIsConnected] = useState(false);
   const [flood, setFlood] = useState<ScanResultFlood | null>(null);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [listFull, setListFull] = useState(false);
   const floodTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
