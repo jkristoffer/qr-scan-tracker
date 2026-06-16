@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 let _client: SupabaseClient | null = null;
 
@@ -11,40 +11,6 @@ function getClient(): SupabaseClient {
   }
   return _client;
 }
-
-export const auth = {
-  async signIn(email: string, password: string): Promise<User> {
-    const { data, error } = await getClient().auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    return data.user;
-  },
-
-  async signUp(email: string, password: string, role: 'admin' | 'scanner'): Promise<User | null> {
-    const { data, error } = await getClient().auth.signUp({
-      email,
-      password,
-      options: { data: { role } },
-    });
-    if (error) throw error;
-    return data.user;
-  },
-
-  async signOut(): Promise<void> {
-    const { error } = await getClient().auth.signOut();
-    if (error) throw error;
-  },
-
-  async getSession() {
-    const { data: { session } } = await getClient().auth.getSession();
-    return session;
-  },
-
-  onAuthStateChange(callback: (user: User | null) => void) {
-    return getClient().auth.onAuthStateChange((_, session) => {
-      callback(session?.user ?? null);
-    });
-  },
-};
 
 export const db = {
   async createSession(name: string) {
@@ -175,14 +141,6 @@ export const db = {
       .insert({ item_id: itemId, session_id: sessionId, gate_name: gateName, is_duplicate: isDuplicate });
   },
 
-  async deleteItem(itemId: string) {
-    const { error } = await getClient()
-      .from('items')
-      .delete()
-      .eq('id', itemId);
-    if (error) throw error;
-  },
-
   async removeItem(itemId: string) {
     const { data, error } = await getClient()
       .from('items')
@@ -201,16 +159,6 @@ export const db = {
       .eq('id', itemId)
       .select()
       .single();
-    if (error) throw error;
-    return data;
-  },
-
-  async resetSession(sessionId: string) {
-    const { data, error } = await getClient()
-      .from('items')
-      .update({ scanned: false, scanned_at: null, scanned_by: null })
-      .eq('session_id', sessionId)
-      .select();
     if (error) throw error;
     return data;
   },

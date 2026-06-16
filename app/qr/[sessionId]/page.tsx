@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import QRCode from 'qrcode';
 import { db } from '@/lib/supabase';
+import { toQrDataUrl } from '@/lib/qr';
 import { Item, ScanSession } from '@/lib/types';
 
 interface QRCard {
@@ -29,15 +29,7 @@ export default function QRCodesPage() {
         ]);
         setSession(sess);
         const generated = await Promise.all(
-          items.map(async item => ({
-            item,
-            dataUrl: await QRCode.toDataURL(item.barcode, {
-              width: 200,
-              margin: 1,
-              color: { dark: '#161618', light: '#ffffff' },
-              errorCorrectionLevel: 'M',
-            }),
-          }))
+          items.map(async item => ({ item, dataUrl: await toQrDataUrl(item.barcode) }))
         );
         setCards(generated);
       } catch {

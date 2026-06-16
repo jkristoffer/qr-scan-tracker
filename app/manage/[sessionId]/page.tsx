@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import QRCode from 'qrcode';
 import { db } from '@/lib/supabase';
+import { toQrDataUrl } from '@/lib/qr';
 import { Item, ScanSession } from '@/lib/types';
 
 interface GuestCard {
@@ -23,13 +23,6 @@ function nextTicketCode(items: Item[]): string {
   return `TKT-${String(max + 1).padStart(4, '0')}`;
 }
 
-async function toDataUrl(barcode: string): Promise<string> {
-  return QRCode.toDataURL(barcode, {
-    width: 200, margin: 1,
-    color: { dark: '#161618', light: '#ffffff' },
-    errorCorrectionLevel: 'M',
-  });
-}
 
 function sortedActive(cards: GuestCard[], pinnedId?: string): GuestCard[] {
   return [...cards].sort((a, b) => {
@@ -71,7 +64,7 @@ export default function ManagePage() {
       try {
         const [sess, items] = await Promise.all([db.getSession(sessionId), db.getAllItems(sessionId)]);
         setSession(sess);
-        const generated = await Promise.all(items.map(async item => ({ item, dataUrl: await toDataUrl(item.barcode) })));
+        const generated = await Promise.all(items.map(async item => ({ item, dataUrl: await toQrDataUrl(item.barcode) })));
         setCards(generated);
       } catch {
         router.push('/');
@@ -95,7 +88,7 @@ export default function ManagePage() {
     try {
       const barcode = nextTicketCode(cards.map(c => c.item));
       const item = await db.addItem(sessionId, name, barcode);
-      const dataUrl = await toDataUrl(barcode);
+      const dataUrl = await toQrDataUrl(barcode);
       setCards(prev => [...prev, { item, dataUrl }]);
       setAddName('');
       inputRef.current?.focus();
