@@ -2,12 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  background-color: #fafafa;
-  color: #0a0a0a;
-  -webkit-font-smoothing: antialiased;
-}
+*, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; background: #000; }
+body { -webkit-font-smoothing: antialiased; }
+::-webkit-scrollbar { width: 0; height: 0; }
+input, select, textarea { -webkit-appearance: none; }
 
-input, select, textarea {
-  -webkit-appearance: none;
+@keyframes floodPop {
+  0%   { opacity: 0; transform: scale(1.06); }
+  12%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes glyphPop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  55%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes scanline {
+  0%   { transform: translateY(-46px); opacity: 0; }
+  18%  { opacity: 1; }
+  82%  { opacity: 1; }
+  100% { transform: translateY(46px); opacity: 0; }
+}
+@keyframes reticle {
+  0%, 100% { opacity: 0.55; }
+  50%       { opacity: 1; }
+}
+@keyframes sheetUp {
+  from { transform: translateY(102%); }
+  to   { transform: translateY(0); }
+}
+@keyframes liveDot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+@keyframes rowFlash {
+  0%   { background-color: rgba(120,220,120,0.18); }
+  100% { background-color: #ffffff; }
 }

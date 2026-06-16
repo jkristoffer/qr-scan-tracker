@@ -1,38 +1,53 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { User } from '@supabase/supabase-js';
-import { auth, db } from '@/lib/supabase';
+import { db } from '@/lib/supabase';
 import { useScanStore } from '@/store/useScanStore';
-import { AuthGuard } from '@/components/AuthGuard';
 import { Scanner } from '@/components/Scanner';
 import { ProgressCard } from '@/components/ProgressCard';
 import { ItemList } from '@/components/ItemList';
+import { ResultFlood, ScanResultFlood } from '@/components/ResultFlood';
 import { ScanResult } from '@/lib/types';
 
-const RESULT_STYLE = {
-  success: 'border-l-2 border-neutral-900 bg-neutral-50',
-  duplicate: 'border-l-2 border-neutral-300 bg-neutral-50',
-  not_found: 'border-l-2 border-neutral-200 bg-neutral-50',
-} as const;
+function beep(type: 'admit' | 'already' | 'nomatch') {
+  try {
+    const ac = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const tone = (freq: number, t0: number, dur: number, kind: OscillatorType, gain: number) => {
+      const o = ac.createOscillator(); const g = ac.createGain();
+      o.type = kind; o.frequency.value = freq; o.connect(g); g.connect(ac.destination);
+      const t = ac.currentTime + t0;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(gain, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.start(t); o.stop(t + dur + 0.03);
+    };
+    if (type === 'admit')   { tone(880, 0, 0.12, 'sine', 0.28); tone(1320, 0.1, 0.16, 'sine', 0.24); }
+    if (type === 'already') { tone(523, 0, 0.2, 'sine', 0.22); }
+    if (type === 'nomatch') { tone(150, 0, 0.34, 'square', 0.18); }
+  } catch {}
+}
 
-function ScannerPage({ user }: { user: User }) {
+function buzz(type: 'admit' | 'already' | 'nomatch') {
+  if (!navigator.vibrate) return;
+  navigator.vibrate(type === 'admit' ? [35] : type === 'already' ? [25, 40, 25] : [120, 40, 120]);
+}
+
+export default function ScannerPage() {
   const params = useParams();
   const sessionId = params.sessionId as string;
   const router = useRouter();
 
-  const { setItems, updateItem, progress, lastScan, setLastScan } = useScanStore();
+  const { items, setItems, updateItem, progress, setLastScan } = useScanStore();
 
   const [loading, setLoading] = useState(true);
-  const [sessionName, setSessionName] = useState<string | null>(null);
+  const [sessionName, setSessionName] = useState('');
   const [isConnected, setIsConnected] = useState(false);
-  const [isResetting, setIsResetting] = useState(false);
-
-  const isAdmin = user.user_metadata?.role === 'admin';
+  const [flood, setFlood] = useState<ScanResultFlood | null>(null);
+  const floodTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const loadSession = async () => {
+    const load = async () => {
       try {
         const session = await db.getSession(sessionId);
         setSessionName(session.name);
@@ -44,126 +59,119 @@ function ScannerPage({ user }: { user: User }) {
         setLoading(false);
       }
     };
-    loadSession();
+    load();
   }, [sessionId, router, setItems]);
 
   useEffect(() => {
-    const channel = db.subscribeToItems(sessionId, (payload) => {
+    const channel = db.subscribeToItems(sessionId, payload => {
       if (payload.eventType === 'UPDATE') updateItem(payload.new as any);
     });
     channel.subscribe((status: string) => setIsConnected(status === 'SUBSCRIBED'));
     return () => { channel.unsubscribe(); };
   }, [sessionId, updateItem]);
 
-  const handleScanComplete = (result: ScanResult) => {
-    setLastScan({
-      barcode: result.item?.barcode || '',
-      result: result.type,
-      message: result.message,
-      timestamp: Date.now(),
-    });
-    if (result.success && result.item) updateItem(result.item);
-  };
+  const showFlood = useCallback((result: ScanResultFlood) => {
+    if (floodTimer.current) clearTimeout(floodTimer.current);
+    setFlood(result);
+    floodTimer.current = setTimeout(() => setFlood(null), result.type === 'admit' ? 1500 : 2000);
+  }, []);
 
-  const handleReset = async () => {
-    if (!confirm('Reset all scan status? This cannot be undone.')) return;
-    setIsResetting(true);
-    try {
-      await db.resetSession(sessionId);
-      const fresh = await db.getItems(sessionId);
-      setItems(fresh);
-      setLastScan(null);
-    } catch (err) {
-      console.error('Reset failed', err);
-    } finally {
-      setIsResetting(false);
+  const handleScanComplete = useCallback((result: ScanResult) => {
+    setLastScan({ barcode: result.item?.barcode || '', result: result.type, message: result.message, timestamp: Date.now() });
+    if (result.success && result.item) updateItem(result.item);
+
+    const type = result.type === 'success' ? 'admit' : result.type === 'duplicate' ? 'already' : 'nomatch';
+    beep(type); buzz(type);
+    showFlood({
+      type,
+      name: result.type === 'success'
+        ? (result.item?.name ?? '')
+        : result.type === 'duplicate'
+          ? (result.item?.name ?? 'Already checked in')
+          : 'Ticket not recognised',
+      sub: result.type === 'success'
+        ? (result.item?.barcode ?? '')
+        : result.type === 'duplicate'
+          ? 'Entered earlier · This gate'
+          : 'Code ' + (result.item?.barcode ?? '—'),
+    });
+  }, [setLastScan, updateItem, showFlood]);
+
+  const demoScan = useCallback((type: 'admit' | 'already' | 'nomatch') => {
+    beep(type); buzz(type);
+    if (type === 'admit') {
+      const pend = items.filter(i => !i.scanned);
+      if (pend.length === 0) { showFlood({ type: 'nomatch', name: 'Ticket not recognised', sub: 'Code DEMO-0000' }); return; }
+      const g = pend[Math.floor(Math.random() * pend.length)];
+      db.scanItem(g.id, 'Demo').then(scanned => {
+        if (scanned) {
+          updateItem(scanned);
+          setLastScan({ barcode: scanned.barcode, result: 'success', message: scanned.name, timestamp: Date.now() });
+          showFlood({ type: 'admit', name: scanned.name, sub: scanned.barcode });
+        }
+      });
+    } else if (type === 'already') {
+      const ins = items.filter(i => i.scanned);
+      const g = ins.length ? ins[Math.floor(Math.random() * ins.length)] : items[0];
+      if (g) showFlood({ type: 'already', name: g.name, sub: `Entered earlier · ${g.scanned_by ?? 'Gate'}` });
+    } else {
+      showFlood({ type: 'nomatch', name: 'Ticket not recognised', sub: 'Code DEMO-' + Math.floor(1000 + Math.random() * 9000) });
     }
-  };
+  }, [items, updateItem, setLastScan, showFlood]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
-        <div className="w-5 h-5 border-2 border-neutral-300 border-t-neutral-900 rounded-full animate-spin" />
+      <div style={{ minHeight: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: '#5a5a5e' }}>LOADING…</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50">
-      {/* Header */}
-      <header className="bg-white border-b border-neutral-200 px-4 py-3.5 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={() => router.push('/')}
-              className="text-neutral-400 hover:text-neutral-900 transition-colors flex-shrink-0"
-              aria-label="Back"
-            >
-              ←
-            </button>
-            <p className="text-sm font-medium text-neutral-900 truncate">{sessionName}</p>
+    <div style={{ minHeight: '100vh', background: '#000', display: 'flex', justifyContent: 'center', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+      <div style={{ position: 'relative', width: '100%', maxWidth: 480, height: '100vh', background: '#fbfbfa', color: '#161618', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+        {/* Top bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 16px 14px', borderBottom: '1px solid #ececea', flexShrink: 0 }}>
+          <div
+            onClick={() => router.push('/')}
+            style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid #e2e2de', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, cursor: 'pointer', flexShrink: 0 }}
+          >
+            ‹
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-            {isAdmin && (
-              <>
-                <button
-                  onClick={handleReset}
-                  disabled={isResetting}
-                  className="text-xs text-neutral-500 hover:text-neutral-900 border border-neutral-200 hover:border-neutral-400 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-40"
-                >
-                  {isResetting ? 'Resetting…' : 'Reset'}
-                </button>
-                <a
-                  href={`/api/export/${sessionId}`}
-                  download
-                  className="text-xs text-neutral-500 hover:text-neutral-900 border border-neutral-200 hover:border-neutral-400 px-2.5 py-1.5 rounded-lg transition-colors"
-                >
-                  Export
-                </a>
-              </>
-            )}
-            <button
-              onClick={async () => { await auth.signOut(); router.push('/login'); }}
-              className="text-xs text-neutral-400 hover:text-neutral-900 transition-colors"
-            >
-              Sign out
-            </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sessionName}</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.1em', color: '#9a9a96', marginTop: 2 }}>This gate</div>
+          </div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: '#161618', border: '1px solid #e2e2de', borderRadius: 999, padding: '5px 10px', flexShrink: 0 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: isConnected ? 'oklch(0.74 0.17 152)' : '#c2c2be', animation: isConnected ? 'liveDot 1.4s ease-in-out infinite' : 'none' }} />
+            LIVE
           </div>
         </div>
-      </header>
 
-      {/* Content */}
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-        {/* Progress always at top */}
-        <ProgressCard progress={progress} isConnected={isConnected} />
+        {/* Camera hero */}
+        <Scanner sessionId={sessionId} onScanComplete={handleScanComplete} />
 
-        {/* Last scan result */}
-        {lastScan && (
-          <div className={`px-4 py-3.5 rounded-xl ${RESULT_STYLE[lastScan.result]}`}>
-            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500 mb-0.5">
-              {lastScan.result === 'success' ? 'Scanned' : lastScan.result === 'duplicate' ? 'Duplicate' : 'Not found'}
-            </p>
-            <p className="text-sm font-medium text-neutral-900">{lastScan.message}</p>
-            <p className="text-xs text-neutral-400 mt-0.5">
-              {new Date(lastScan.timestamp).toLocaleTimeString()}
-            </p>
-          </div>
+        {/* Progress strip */}
+        <ProgressCard
+          progress={progress}
+          isConnected={isConnected}
+          onDemoAdmit={() => demoScan('admit')}
+          onDemoAlready={() => demoScan('already')}
+          onDemoNoMatch={() => demoScan('nomatch')}
+        />
+
+        {/* Attendee list */}
+        <ItemList />
+
+        {/* Result flood overlay */}
+        {flood && (
+          <ResultFlood
+            result={flood}
+            onDismiss={() => { if (floodTimer.current) clearTimeout(floodTimer.current); setFlood(null); }}
+          />
         )}
-
-        {/* Scanner + item list: stack on mobile, side by side on lg */}
-        <div className="lg:grid lg:grid-cols-2 lg:gap-4 space-y-4 lg:space-y-0">
-          <Scanner sessionId={sessionId} user={user} onScanComplete={handleScanComplete} />
-          <ItemList />
-        </div>
-      </main>
+      </div>
     </div>
-  );
-}
-
-export default function ScannerPageWrapper() {
-  return (
-    <AuthGuard>
-      {user => <ScannerPage user={user} />}
-    </AuthGuard>
   );
 }

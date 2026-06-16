@@ -5,44 +5,46 @@ import { Progress } from '@/lib/types';
 interface ProgressCardProps {
   progress: Progress;
   isConnected: boolean;
+  onDemoAdmit?: () => void;
+  onDemoAlready?: () => void;
+  onDemoNoMatch?: () => void;
 }
 
-export function ProgressCard({ progress, isConnected }: ProgressCardProps) {
+export function ProgressCard({ progress, isConnected, onDemoAdmit, onDemoAlready, onDemoNoMatch }: ProgressCardProps) {
+  const pct = Math.round(progress.percentage);
+
   return (
-    <div className="bg-white border border-neutral-200 rounded-xl p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4">
-          <div>
-            <p className="text-2xl font-semibold text-neutral-900 tabular-nums">{progress.scanned}</p>
-            <p className="text-xs text-neutral-400 mt-0.5">scanned</p>
-          </div>
-          <span className="text-neutral-200 text-lg">/</span>
-          <div>
-            <p className="text-2xl font-semibold text-neutral-400 tabular-nums">{progress.total}</p>
-            <p className="text-xs text-neutral-400 mt-0.5">total</p>
-          </div>
+    <div style={{ flexShrink: 0, padding: '16px 18px 14px', borderBottom: '1px solid #ececea', background: '#fbfbfa' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+          <div style={{ fontSize: 46, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 0.9 }}>{progress.scanned}</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: '#c2c2be', letterSpacing: '-0.02em' }}>/ {progress.total}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.16em', color: '#9a9a96', marginLeft: 8, paddingBottom: 5 }}>CHECKED IN</div>
         </div>
-        <div className="text-right">
-          <p className="text-2xl font-semibold text-neutral-900 tabular-nums">
-            {progress.percentage.toFixed(0)}%
-          </p>
-          <div className="flex items-center justify-end gap-1 mt-0.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-neutral-400' : 'bg-neutral-200'}`} />
-            <span className="text-xs text-neutral-400">{isConnected ? 'live' : 'offline'}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, paddingBottom: 4 }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: '#161618' }}>{pct}%</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: isConnected ? 'oklch(0.74 0.17 152)' : '#c2c2be', animation: isConnected ? 'liveDot 1.4s ease-in-out infinite' : 'none' }} />
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.14em', color: '#b4b4b0' }}>{isConnected ? 'LIVE' : 'OFFLINE'}</span>
           </div>
         </div>
       </div>
 
-      <div className="h-1.5 bg-neutral-100 rounded-full overflow-hidden">
-        <div
-          className="h-full bg-neutral-900 rounded-full transition-all duration-300 ease-out"
-          style={{ width: `${progress.percentage}%` }}
-        />
+      <div style={{ height: 8, background: '#ededea', borderRadius: 999, overflow: 'hidden', marginTop: 12 }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: '#161618', borderRadius: 999, transition: 'width 0.4s cubic-bezier(0.16,1,0.3,1)' }} />
       </div>
 
-      {progress.remaining > 0 && (
-        <p className="text-xs text-neutral-400 mt-2">{progress.remaining} remaining</p>
-      )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 11 }}>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#8c8c88' }}>
+          {Math.max(0, progress.total - progress.scanned)} still expected
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: '0.14em', color: '#b4b4b0' }}>DEMO</span>
+          <button onClick={onDemoAdmit} style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid #d8d8d4', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'oklch(0.6 0.16 152)', fontSize: 15, fontWeight: 700 }}>✓</button>
+          <button onClick={onDemoAlready} style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid #d8d8d4', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'oklch(0.62 0.15 70)', fontSize: 15, fontWeight: 700 }}>!</button>
+          <button onClick={onDemoNoMatch} style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid #d8d8d4', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'oklch(0.58 0.2 26)', fontSize: 15, fontWeight: 700 }}>✕</button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -2,137 +2,119 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { User } from '@supabase/supabase-js';
 import { db } from '@/lib/supabase';
 import { ScanResult } from '@/lib/types';
 
 interface ScannerProps {
   sessionId: string;
-  user: User;
   onScanComplete: (result: ScanResult) => void;
 }
 
-export function Scanner({ sessionId, user, onScanComplete }: ScannerProps) {
+type CamStatus = 'idle' | 'loading' | 'live' | 'denied';
+
+export function Scanner({ sessionId, onScanComplete }: ScannerProps) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [scannedBy, setScannedBy] = useState(user.email?.split('@')[0] ?? '');
+  const [camStatus, setCamStatus] = useState<CamStatus>('idle');
 
   useEffect(() => {
+    startScanning();
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(console.error);
-      }
+      if (scannerRef.current) scannerRef.current.stop().catch(() => {});
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const startScanning = async () => {
-    if (!scannedBy.trim()) {
-      setError('Enter your name to continue');
-      return;
-    }
-    setError(null);
-    setIsScanning(true);
+    setCamStatus('loading');
     try {
-      const scanner = new Html5Qrcode('scanner-preview');
+      const scanner = new Html5Qrcode('scanner-hero');
       scannerRef.current = scanner;
       await scanner.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 240, height: 240 } },
+        { fps: 10, qrbox: { width: 210, height: 158 } },
         async (decodedText) => {
           await scanner.pause();
           try {
-            const result = await processScan(decodedText, scannedBy);
+            const result = await processScan(decodedText);
             onScanComplete(result);
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'Scan failed');
+          } catch {
+            onScanComplete({ success: false, message: 'Scan error', type: 'not_found' });
           }
-          setTimeout(() => scanner.resume(), 1500);
+          setTimeout(() => { try { scanner.resume(); } catch {} }, 1800);
         },
         () => {}
       );
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Could not start camera. Check permissions.'
-      );
-      setIsScanning(false);
+      setCamStatus('live');
+    } catch {
+      setCamStatus('denied');
     }
   };
 
-  const stopScanning = async () => {
-    if (scannerRef.current) {
-      await scannerRef.current.stop();
-      scannerRef.current = null;
+  const handleTap = async () => {
+    if (camStatus === 'denied') {
+      // demo tap: simulate a random scan via callback with a fake result
+      // The parent page handles demo scanning; here we just indicate camera is unavailable.
     }
-    setIsScanning(false);
   };
 
-  const processScan = async (barcode: string, user: string): Promise<ScanResult> => {
+  const processScan = async (barcode: string): Promise<ScanResult> => {
     const item = await db.getItemByBarcode(sessionId, barcode);
-    if (!item) {
-      return { success: false, message: `Not found: ${barcode}`, type: 'not_found' };
-    }
+    if (!item) return { success: false, message: 'Not found', type: 'not_found' };
     if (item.scanned) {
       return {
         success: false, item,
-        message: `Already scanned by ${item.scanned_by} at ${new Date(item.scanned_at || '').toLocaleTimeString()}`,
+        message: `Already checked in by ${item.scanned_by} at ${new Date(item.scanned_at || '').toLocaleTimeString()}`,
         type: 'duplicate',
       };
     }
-    const scanned = await db.scanItem(item.id, user);
+    const scanned = await db.scanItem(item.id, 'Gate');
     if (!scanned) {
-      const freshItem = await db.getItemByBarcode(sessionId, barcode);
-      return { success: false, item: freshItem || undefined, message: 'Just scanned by someone else', type: 'duplicate' };
+      const fresh = await db.getItemByBarcode(sessionId, barcode);
+      return { success: false, item: fresh || undefined, message: 'Just checked in by another gate', type: 'duplicate' };
     }
     return { success: true, item: scanned, message: scanned.name, type: 'success' };
   };
 
   return (
-    <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
-      {/* Name field */}
-      <div className="px-4 pt-4 pb-3 border-b border-neutral-100">
-        <label className="block text-xs font-medium text-neutral-500 uppercase tracking-wide mb-1.5">
-          Your name
-        </label>
-        <input
-          type="text"
-          value={scannedBy}
-          onChange={e => setScannedBy(e.target.value)}
-          disabled={isScanning}
-          placeholder="Display name for scans"
-          className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-900 focus:border-neutral-900 disabled:opacity-50"
-        />
-      </div>
+    <div
+      onClick={camStatus === 'denied' ? handleTap : undefined}
+      style={{ position: 'relative', flex: '1.35', minHeight: 230, background: '#0b0b0d', overflow: 'hidden', cursor: camStatus === 'denied' ? 'pointer' : 'default' }}
+    >
+      {/* html5-qrcode renders video inside this div */}
+      <div id="scanner-hero" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
 
-      {/* Camera preview */}
-      <div
-        id="scanner-preview"
-        className="bg-neutral-900 aspect-square w-full"
-      />
+      {/* Vignette */}
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at center, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 100%)', pointerEvents: 'none' }} />
 
-      {/* Controls */}
-      <div className="p-4 space-y-3">
-        {error && (
-          <p className="text-xs text-neutral-600 bg-neutral-100 border border-neutral-200 px-3 py-2 rounded-lg">
-            {error}
-          </p>
-        )}
-        {!isScanning ? (
-          <button
-            onClick={startScanning}
-            className="w-full py-3 bg-neutral-900 hover:bg-neutral-700 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            Start scanning
-          </button>
-        ) : (
-          <button
-            onClick={stopScanning}
-            className="w-full py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-900 text-sm font-medium rounded-lg transition-colors"
-          >
-            Stop scanning
-          </button>
-        )}
-      </div>
+      {/* Camera denied / loading */}
+      {camStatus === 'denied' && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 28, textAlign: 'center' }}>
+          <div style={{ width: 52, height: 52, borderRadius: '50%', border: '2px solid #5a5a5e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, color: '#9a9a9e' }}>⃠</div>
+          <div style={{ color: '#e8e8e6', fontSize: 15, fontWeight: 600 }}>Camera unavailable</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#8a8a8e', maxWidth: 230 }}>Allow camera access to scan tickets.</div>
+        </div>
+      )}
+      {(camStatus === 'idle' || camStatus === 'loading') && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: '#8a8a8e' }}>
+          STARTING CAMERA…
+        </div>
+      )}
+
+      {/* Reticle (shown when live) */}
+      {camStatus === 'live' && (
+        <>
+          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 210, height: 158, pointerEvents: 'none' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, width: 36, height: 36, borderTop: '4px solid #fff', borderLeft: '4px solid #fff', borderRadius: '5px 0 0 0', animation: 'reticle 1.8s ease-in-out infinite' }} />
+            <div style={{ position: 'absolute', top: 0, right: 0, width: 36, height: 36, borderTop: '4px solid #fff', borderRight: '4px solid #fff', borderRadius: '0 5px 0 0', animation: 'reticle 1.8s ease-in-out infinite' }} />
+            <div style={{ position: 'absolute', bottom: 0, left: 0, width: 36, height: 36, borderBottom: '4px solid #fff', borderLeft: '4px solid #fff', borderRadius: '0 0 0 5px', animation: 'reticle 1.8s ease-in-out infinite' }} />
+            <div style={{ position: 'absolute', bottom: 0, right: 0, width: 36, height: 36, borderBottom: '4px solid #fff', borderRight: '4px solid #fff', borderRadius: '0 0 5px 0', animation: 'reticle 1.8s ease-in-out infinite' }} />
+            <div style={{ position: 'absolute', top: '50%', left: 12, right: 12, height: 2, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.9), transparent)', animation: 'scanline 2.1s ease-in-out infinite' }} />
+          </div>
+          <div style={{ position: 'absolute', bottom: 16, left: 0, right: 0, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.24em', color: 'rgba(255,255,255,0.82)', pointerEvents: 'none' }}>
+            TAP TO SCAN TICKET
+          </div>
+        </>
+      )}
     </div>
   );
 }

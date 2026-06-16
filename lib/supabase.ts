@@ -67,6 +67,22 @@ export const db = {
     return data;
   },
 
+  async getSessionsProgress(sessionIds: string[]): Promise<Record<string, { total: number; scanned: number }>> {
+    if (sessionIds.length === 0) return {};
+    const { data, error } = await getClient()
+      .from('items')
+      .select('session_id, scanned')
+      .in('session_id', sessionIds);
+    if (error) throw error;
+    const result: Record<string, { total: number; scanned: number }> = {};
+    for (const item of (data || [])) {
+      if (!result[item.session_id]) result[item.session_id] = { total: 0, scanned: 0 };
+      result[item.session_id].total++;
+      if (item.scanned) result[item.session_id].scanned++;
+    }
+    return result;
+  },
+
   async listSessions() {
     const { data, error } = await getClient()
       .from('scan_sessions')
