@@ -14,12 +14,18 @@ type CamStatus = 'idle' | 'loading' | 'live' | 'denied';
 
 export function Scanner({ sessionId, onScanComplete }: ScannerProps) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const isRunning = useRef(false);
+  const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [camStatus, setCamStatus] = useState<CamStatus>('idle');
 
   useEffect(() => {
     startScanning();
     return () => {
-      if (scannerRef.current) scannerRef.current.stop().catch(() => {});
+      if (resumeTimer.current) clearTimeout(resumeTimer.current);
+      if (scannerRef.current && isRunning.current) {
+        isRunning.current = false;
+        scannerRef.current.stop().catch(() => {});
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -33,17 +39,20 @@ export function Scanner({ sessionId, onScanComplete }: ScannerProps) {
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 210, height: 158 } },
         async (decodedText) => {
-          await scanner.pause();
+          try { scanner.pause(); } catch {}
           try {
             const result = await processScan(decodedText);
             onScanComplete(result);
           } catch {
             onScanComplete({ success: false, message: 'Scan error', type: 'not_found' });
           }
-          setTimeout(() => { try { scanner.resume(); } catch {} }, 1800);
+          resumeTimer.current = setTimeout(() => {
+            if (isRunning.current) { try { scanner.resume(); } catch {} }
+          }, 1800);
         },
         () => {}
       );
+      isRunning.current = true;
       setCamStatus('live');
     } catch {
       setCamStatus('denied');
