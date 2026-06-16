@@ -38,8 +38,8 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
       const scanner = new Html5Qrcode('scanner-hero');
       scannerRef.current = scanner;
       await scanner.start(
-        { facingMode: 'environment', width: { ideal: 720 }, height: { ideal: 1280 } },
-        { fps: 10 },
+        { facingMode: 'environment' },
+        { fps: 10, videoConstraints: { facingMode: 'environment', width: { ideal: 720 }, height: { ideal: 1280 } } },
         async (decodedText) => {
           try { scanner.pause(); } catch {}
           try {
