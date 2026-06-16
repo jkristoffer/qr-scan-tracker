@@ -44,6 +44,7 @@ export default function ScannerPage() {
   const [sessionName, setSessionName] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [flood, setFlood] = useState<ScanResultFlood | null>(null);
+  const [panelOpen, setPanelOpen] = useState(true);
   const floodTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -152,17 +153,30 @@ export default function ScannerPage() {
         {/* Camera hero */}
         <Scanner sessionId={sessionId} onScanComplete={handleScanComplete} />
 
-        {/* Progress strip */}
-        <ProgressCard
-          progress={progress}
-          isConnected={isConnected}
-          onDemoAdmit={() => demoScan('admit')}
-          onDemoAlready={() => demoScan('already')}
-          onDemoNoMatch={() => demoScan('nomatch')}
-        />
+        {/* Pull tab */}
+        <div
+          onClick={() => setPanelOpen(o => !o)}
+          style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 16px', background: '#fbfbfa', borderTop: '1px solid #ececea', cursor: 'pointer', userSelect: 'none' }}
+        >
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.16em', color: '#9a9a96' }}>
+            {panelOpen ? 'HIDE LIST' : `${progress.scanned}/${progress.total} · SHOW LIST`}
+          </div>
+          <span style={{ fontSize: 12, color: '#b4b4b0', display: 'inline-block', transform: panelOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+        </div>
 
-        {/* Attendee list */}
-        <ItemList />
+        {/* Collapsible panel */}
+        {panelOpen && (
+          <>
+            <ProgressCard
+              progress={progress}
+              isConnected={isConnected}
+              onDemoAdmit={() => demoScan('admit')}
+              onDemoAlready={() => demoScan('already')}
+              onDemoNoMatch={() => demoScan('nomatch')}
+            />
+            <ItemList />
+          </>
+        )}
 
         {/* Result flood overlay */}
         {flood && (
