@@ -59,6 +59,10 @@ export default function ManagePage() {
   const [removeTarget, setRemoveTarget] = useState<GuestCard | null>(null);
   const [acting, setActing] = useState(false);
   const [pinnedId, setPinnedId] = useState<string | undefined>(undefined);
+  const [expandedQr, setExpandedQr] = useState<Set<string>>(new Set());
+
+  const toggleQr = (id: string) =>
+    setExpandedQr(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   const inputRef = useRef<HTMLInputElement>(null);
   const pinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -239,35 +243,56 @@ export default function ManagePage() {
           {displayActive.length === 0 && (
             <div style={{ textAlign: 'center', padding: '48px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#b4b4b0', letterSpacing: '0.1em' }}>NO GUESTS YET</div>
           )}
-          {displayActive.map(card => (
-            <div
-              key={card.item.id}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                background: card.item.id === pinnedId ? 'oklch(0.96 0.04 152)' : '#fff',
-                border: `1px solid ${card.item.id === pinnedId ? 'oklch(0.82 0.1 152)' : '#ececea'}`,
-                borderRadius: 14, padding: '12px 12px 12px 14px',
-                transition: 'background 0.4s, border-color 0.4s',
-              }}
-            >
-              <img src={card.dataUrl} alt={card.item.barcode} style={{ width: 64, height: 64, flexShrink: 0, borderRadius: 6 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.item.name}</div>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#9a9a96', marginTop: 3, letterSpacing: '0.04em' }}>{card.item.barcode}</div>
-                {card.item.scanned && (
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 5, background: 'oklch(0.95 0.05 152)', borderRadius: 6, padding: '3px 8px' }}>
-                    <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.12em', color: 'oklch(0.45 0.14 152)', fontWeight: 700 }}>CHECKED IN</span>
+          {displayActive.map(card => {
+            const qrOpen = expandedQr.has(card.item.id);
+            const pinned = card.item.id === pinnedId;
+            const checkinTime = card.item.scanned_at
+              ? new Date(card.item.scanned_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+              : null;
+            return (
+              <div
+                key={card.item.id}
+                style={{
+                  background: pinned ? 'oklch(0.96 0.04 152)' : '#fff',
+                  border: `1px solid ${pinned ? 'oklch(0.82 0.1 152)' : '#ececea'}`,
+                  borderRadius: 14, padding: '12px 12px 12px 14px',
+                  transition: 'background 0.4s, border-color 0.4s',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button
+                    onClick={() => toggleQr(card.item.id)}
+                    title={qrOpen ? 'Hide QR' : 'Show QR'}
+                    style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 8, border: '1px solid #e2e2de', background: qrOpen ? '#161618' : '#f4f4f2', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: qrOpen ? '#fff' : '#6a6a66', fontSize: 15, transition: 'background 0.15s' }}
+                  >
+                    ▦
+                  </button>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.item.name}</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#9a9a96', marginTop: 3, letterSpacing: '0.04em' }}>{card.item.barcode}</div>
+                    {card.item.scanned && (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 5, background: 'oklch(0.95 0.05 152)', borderRadius: 6, padding: '3px 8px' }}>
+                        <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.12em', color: 'oklch(0.45 0.14 152)', fontWeight: 700 }}>
+                          CHECKED IN{checkinTime ? ` · ${checkinTime}` : ''}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setRemoveTarget(card)}
+                    style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 8, border: '1px solid #e2e2de', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#b4b4b0', fontSize: 16 }}
+                  >
+                    ×
+                  </button>
+                </div>
+                {qrOpen && (
+                  <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12 }}>
+                    <img src={card.dataUrl} alt={card.item.barcode} style={{ width: 120, height: 120, borderRadius: 8 }} />
                   </div>
                 )}
               </div>
-              <button
-                onClick={() => setRemoveTarget(card)}
-                style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 8, border: '1px solid #e2e2de', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#b4b4b0', fontSize: 16 }}
-              >
-                ×
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -279,7 +304,6 @@ export default function ManagePage() {
           )}
           {displayRemoved.map(card => (
             <div key={card.item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#fff', border: '1px solid #ececea', borderRadius: 14, padding: '12px 12px 12px 14px', opacity: 0.7 }}>
-              <img src={card.dataUrl} alt={card.item.barcode} style={{ width: 64, height: 64, flexShrink: 0, borderRadius: 6, filter: 'grayscale(1)' }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#6a6a66' }}>{card.item.name}</div>
                 <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#b4b4b0', marginTop: 3, letterSpacing: '0.04em' }}>{card.item.barcode}</div>
