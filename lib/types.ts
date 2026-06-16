@@ -12,6 +12,7 @@ export interface Item {
   scanned: boolean;
   scanned_at: string | null;
   scanned_by: string | null;
+  removed: boolean;
 }
 
 export interface ScanResult {

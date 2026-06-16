@@ -69,16 +69,20 @@ export const db = {
 
   async getSessionsProgress(sessionIds: string[]): Promise<Record<string, { total: number; scanned: number }>> {
     if (sessionIds.length === 0) return {};
-    const { data, error } = await getClient()
-      .from('items')
-      .select('session_id, scanned')
-      .in('session_id', sessionIds);
-    if (error) throw error;
+    const [{ data: activeData, error: e1 }, { data: scannedData, error: e2 }] = await Promise.all([
+      getClient().from('items').select('session_id').in('session_id', sessionIds).eq('removed', false),
+      getClient().from('items').select('session_id').in('session_id', sessionIds).eq('scanned', true),
+    ]);
+    if (e1) throw e1;
+    if (e2) throw e2;
     const result: Record<string, { total: number; scanned: number }> = {};
-    for (const item of (data || [])) {
+    for (const item of (activeData || [])) {
       if (!result[item.session_id]) result[item.session_id] = { total: 0, scanned: 0 };
       result[item.session_id].total++;
-      if (item.scanned) result[item.session_id].scanned++;
+    }
+    for (const item of (scannedData || [])) {
+      if (!result[item.session_id]) result[item.session_id] = { total: 0, scanned: 0 };
+      result[item.session_id].scanned++;
     }
     return result;
   },
@@ -112,6 +116,16 @@ export const db = {
     const { data, error } = await getClient()
       .from('items')
       .select('*')
+      .eq('session_id', sessionId)
+      .eq('removed', false);
+    if (error) throw error;
+    return data;
+  },
+
+  async getAllItems(sessionId: string) {
+    const { data, error } = await getClient()
+      .from('items')
+      .select('*')
       .eq('session_id', sessionId);
     if (error) throw error;
     return data;
@@ -123,6 +137,7 @@ export const db = {
       .select('*')
       .eq('session_id', sessionId)
       .eq('barcode', barcode)
+      .eq('removed', false)
       .maybeSingle();
     if (error) throw error;
     return data;
@@ -160,6 +175,28 @@ export const db = {
       .delete()
       .eq('id', itemId);
     if (error) throw error;
+  },
+
+  async removeItem(itemId: string) {
+    const { data, error } = await getClient()
+      .from('items')
+      .update({ removed: true })
+      .eq('id', itemId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async restoreItem(itemId: string) {
+    const { data, error } = await getClient()
+      .from('items')
+      .update({ removed: false })
+      .eq('id', itemId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
   },
 
   async resetSession(sessionId: string) {
