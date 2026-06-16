@@ -4,9 +4,22 @@
 
 *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-/* Hide html5-qrcode's built-in scan region UI — we use our own reticle overlay */
+/* html5-qrcode internal elements — suppress default UI, force video to fill container */
 #qr-shaded-region { display: none !important; }
-#qr-shaded-region + div { display: none !important; }
+#scanner-hero canvas { display: none !important; }
+#scanner-hero video {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+#scanner-hero > div {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
 html, body { margin: 0; padding: 0; background: #000; }
 body { -webkit-font-smoothing: antialiased; }
 ::-webkit-scrollbar { width: 0; height: 0; }
