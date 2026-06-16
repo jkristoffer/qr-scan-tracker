@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "qr": "node scripts/generate-qr.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",
@@ -22,5 +23,8 @@
     "tailwindcss": "^4.3.1",
     "typescript": "^6.0.3",
     "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "qrcode": "^1.5.4"
   }
 }
