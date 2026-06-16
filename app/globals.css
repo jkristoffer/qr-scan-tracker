@@ -37,6 +37,11 @@ input, select, textarea { -webkit-appearance: none; }
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.25; }
 }
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; }
+}
+
 @keyframes rowFlash {
   0%   { background-color: rgba(120,220,120,0.18); }
   100% { background-color: #ffffff; }

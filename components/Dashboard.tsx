@@ -119,17 +119,13 @@ export function Dashboard() {
               return (
                 <div
                   key={s.id}
-                  onClick={() => router.push(`/scan/${s.id}`)}
-                  style={{ border: '1px solid #e6e6e2', background: '#ffffff', borderRadius: 18, padding: '18px 18px 16px', cursor: 'pointer', transition: 'border-color 0.15s' }}
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = '#161618')}
-                  onMouseLeave={e => (e.currentTarget.style.borderColor = '#e6e6e2')}
+                  style={{ border: '1px solid #e6e6e2', background: '#ffffff', borderRadius: 18, padding: '18px 18px 16px' }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: `1px solid ${live ? '#161618' : '#dadad6'}`, background: live ? '#161618' : 'transparent', color: live ? '#fff' : '#8a8a86', borderRadius: 999, padding: '5px 11px 5px 10px', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: '0.16em' }}>
                       <span style={{ width: 6, height: 6, borderRadius: '50%', background: live ? 'oklch(0.78 0.18 152)' : '#c2c2be', animation: live ? 'liveDot 1.4s ease-in-out infinite' : 'none' }} />
                       {live ? 'LIVE' : 'UPCOMING'}
                     </div>
-                    <div style={{ fontSize: 26, color: '#c8c8c4', lineHeight: 1, marginTop: -3 }}>›</div>
                   </div>
                   <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.01em', margin: '13px 0 7px' }}>{s.name}</div>
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, color: '#8c8c88', letterSpacing: '0.01em' }}>
@@ -141,6 +137,20 @@ export function Dashboard() {
                     </div>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: '#161618', whiteSpace: 'nowrap' }}>
                       {prog.scanned}<span style={{ color: '#b6b6b2' }}>/{prog.total}</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                    <div
+                      onClick={e => { e.stopPropagation(); router.push(`/scan/${s.id}`); }}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 38, background: '#161618', color: '#fff', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      Scan
+                    </div>
+                    <div
+                      onClick={e => { e.stopPropagation(); router.push(`/qr/${s.id}`); }}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 38, border: '1px solid #e2e2de', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#161618', cursor: 'pointer', gap: 6 }}
+                    >
+                      QR Codes
                     </div>
                   </div>
                 </div>
