@@ -9,40 +9,40 @@ interface ProgressCardProps {
 
 export function ProgressCard({ progress, isConnected }: ProgressCardProps) {
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-200 dark:border-slate-700">
+    <div className="bg-white border border-neutral-200 rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Progress</h2>
-        <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-          <span className="text-xs text-slate-500">{isConnected ? 'Live' : 'Offline'}</span>
+        <div className="flex items-center gap-4">
+          <div>
+            <p className="text-2xl font-semibold text-neutral-900 tabular-nums">{progress.scanned}</p>
+            <p className="text-xs text-neutral-400 mt-0.5">scanned</p>
+          </div>
+          <span className="text-neutral-200 text-lg">/</span>
+          <div>
+            <p className="text-2xl font-semibold text-neutral-400 tabular-nums">{progress.total}</p>
+            <p className="text-xs text-neutral-400 mt-0.5">total</p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-2xl font-semibold text-neutral-900 tabular-nums">
+            {progress.percentage.toFixed(0)}%
+          </p>
+          <div className="flex items-center justify-end gap-1 mt-0.5">
+            <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-neutral-400' : 'bg-neutral-200'}`} />
+            <span className="text-xs text-neutral-400">{isConnected ? 'live' : 'offline'}</span>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <div className="text-center">
-          <p className="text-3xl font-bold text-slate-800 dark:text-slate-100">{progress.total}</p>
-          <p className="text-xs text-slate-500">Total</p>
-        </div>
-        <div className="text-center">
-          <p className="text-3xl font-bold text-green-600">{progress.scanned}</p>
-          <p className="text-xs text-slate-500">Scanned</p>
-        </div>
-        <div className="text-center">
-          <p className="text-3xl font-bold text-amber-600">{progress.remaining}</p>
-          <p className="text-xs text-slate-500">Remaining</p>
-        </div>
-      </div>
-
-      <div className="relative h-4 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+      <div className="h-1.5 bg-neutral-100 rounded-full overflow-hidden">
         <div
-          className="absolute left-0 top-0 h-full bg-green-500 transition-all duration-300 ease-out"
+          className="h-full bg-neutral-900 rounded-full transition-all duration-300 ease-out"
           style={{ width: `${progress.percentage}%` }}
         />
       </div>
 
-      <p className="text-center mt-2 text-sm font-medium text-slate-600 dark:text-slate-300">
-        {progress.percentage.toFixed(1)}% Complete
-      </p>
+      {progress.remaining > 0 && (
+        <p className="text-xs text-neutral-400 mt-2">{progress.remaining} remaining</p>
+      )}
     </div>
   );
 }

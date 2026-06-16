@@ -16,6 +16,7 @@ export function Dashboard({ user }: DashboardProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ScanSession[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
   const router = useRouter();
 
   const isAdmin = user.user_metadata?.role === 'admin';
@@ -36,22 +37,19 @@ export function Dashboard({ user }: DashboardProps) {
 
   const handleUpload = async () => {
     if (!csvFile || !sessionName.trim()) {
-      setError('Please provide a session name and select a CSV file');
+      setError('Session name and CSV file are required');
       return;
     }
-
     setIsUploading(true);
     setError(null);
-
     try {
       const text = await csvFile.text();
       const lines = text.split('\n').filter(line => line.trim());
       const items = lines.slice(1).map(line => {
         const [barcode, name] = line.split(',').map(s => s.trim());
-        if (!barcode || !name) throw new Error(`Invalid CSV format at line: ${line}`);
+        if (!barcode || !name) throw new Error(`Invalid CSV at line: ${line}`);
         return { barcode, name };
       });
-
       const session = await db.createSession(sessionName);
       await db.createItems(items, session.id);
       router.push(`/scan/${session.id}`);
@@ -68,117 +66,123 @@ export function Dashboard({ user }: DashboardProps) {
   };
 
   return (
-    <div className="space-y-8">
-      {/* User header */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-600 dark:text-slate-400">
-          Signed in as <span className="font-medium">{user.email}</span>
-          <span className="ml-2 px-2 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-xs uppercase tracking-wide">
+    <div className="min-h-screen bg-neutral-50">
+      {/* Header */}
+      <header className="bg-white border-b border-neutral-200 px-4 py-3.5 flex items-center justify-between sticky top-0 z-10">
+        <p className="text-xs font-semibold tracking-widest uppercase text-neutral-400">
+          QR Scan Tracker
+        </p>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-neutral-400 hidden sm:block">{user.email}</span>
+          <span className="text-xs px-1.5 py-0.5 bg-neutral-100 text-neutral-500 rounded font-medium uppercase tracking-wide">
             {isAdmin ? 'Admin' : 'Scanner'}
           </span>
-        </p>
-        <button
-          onClick={handleSignOut}
-          className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-        >
-          Sign out
-        </button>
-      </div>
+          <button
+            onClick={handleSignOut}
+            className="text-xs text-neutral-400 hover:text-neutral-900 transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
+      </header>
 
-      {/* Create session (admin only) */}
-      {isAdmin && (
-        <div className="max-w-md mx-auto">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-200 dark:border-slate-700">
-            <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-6">
-              Create Scan Session
-            </h2>
+      <main className="max-w-lg mx-auto px-4 py-8 space-y-8">
+        {/* Sessions */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-neutral-900 uppercase tracking-wide">Sessions</h2>
+            {isAdmin && (
+              <button
+                onClick={() => setShowCreate(!showCreate)}
+                className="text-xs font-medium text-neutral-900 border border-neutral-300 hover:border-neutral-900 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                {showCreate ? 'Cancel' : '+ New session'}
+              </button>
+            )}
+          </div>
 
-            <div className="space-y-4">
-              <div>
-                <label
-                  htmlFor="sessionName"
-                  className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+          {sessions.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-sm text-neutral-400">
+                {isAdmin ? 'No sessions yet.' : 'No sessions available.'}
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden divide-y divide-neutral-100">
+              {sessions.map(session => (
+                <button
+                  key={session.id}
+                  onClick={() => router.push(`/scan/${session.id}`)}
+                  className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-neutral-50 transition-colors"
                 >
-                  Session Name
+                  <div>
+                    <p className="text-sm font-medium text-neutral-900">{session.name}</p>
+                    <p className="text-xs text-neutral-400 mt-0.5">
+                      {new Date(session.created_at).toLocaleDateString(undefined, {
+                        month: 'short', day: 'numeric', year: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                  <span className="text-neutral-300 text-sm ml-4">›</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Create session (admin only) */}
+        {isAdmin && showCreate && (
+          <section>
+            <h2 className="text-sm font-semibold text-neutral-900 uppercase tracking-wide mb-4">New session</h2>
+            <div className="bg-white border border-neutral-200 rounded-xl p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-neutral-500 uppercase tracking-wide mb-1.5">
+                  Session name
                 </label>
                 <input
                   type="text"
-                  id="sessionName"
                   value={sessionName}
                   onChange={e => setSessionName(e.target.value)}
-                  placeholder="e.g., Warehouse Inventory 2024-06-15"
-                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+                  placeholder="e.g. Warehouse stock take Jun 2026"
+                  className="w-full px-3 py-2.5 bg-neutral-50 border border-neutral-200 rounded-lg text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-900 focus:border-neutral-900"
                 />
               </div>
 
               <div>
-                <label
-                  htmlFor="csvFile"
-                  className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
-                >
-                  Upload CSV (barcode,name)
+                <label className="block text-xs font-medium text-neutral-500 uppercase tracking-wide mb-1.5">
+                  Barcode CSV
                 </label>
-                <input
-                  type="file"
-                  id="csvFile"
-                  accept=".csv"
-                  onChange={handleFileChange}
-                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
-                {csvFile && (
-                  <p className="mt-2 text-sm text-slate-500">Selected: {csvFile.name}</p>
-                )}
+                <label className="flex items-center gap-3 px-3 py-2.5 bg-neutral-50 border border-neutral-200 rounded-lg cursor-pointer hover:border-neutral-400 transition-colors">
+                  <span className="text-xs font-medium text-neutral-500">
+                    {csvFile ? csvFile.name : 'Choose file…'}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFileChange}
+                    className="sr-only"
+                  />
+                </label>
+                <p className="text-xs text-neutral-400 mt-1.5">Format: barcode,name (one per line)</p>
               </div>
 
               {error && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                  <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-                </div>
+                <p className="text-xs text-neutral-600 bg-neutral-100 border border-neutral-200 px-3 py-2 rounded-lg">
+                  {error}
+                </p>
               )}
 
               <button
                 onClick={handleUpload}
                 disabled={isUploading || !sessionName.trim() || !csvFile}
-                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors"
+                className="w-full py-2.5 bg-neutral-900 hover:bg-neutral-700 disabled:bg-neutral-200 disabled:text-neutral-400 text-white text-sm font-medium rounded-lg transition-colors"
               >
-                {isUploading ? 'Creating Session...' : 'Create Session'}
+                {isUploading ? 'Creating…' : 'Create session'}
               </button>
             </div>
-
-            <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
-              <p className="text-xs text-slate-500 mb-2">CSV Format Example:</p>
-              <pre className="text-xs bg-slate-100 dark:bg-slate-900 p-3 rounded-lg overflow-x-auto">
-                <code>{`barcode,name\nABC001,Projector A\nABC002,Projector B`}</code>
-              </pre>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Session list */}
-      <div className="max-w-2xl mx-auto">
-        <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Sessions</h2>
-        {sessions.length === 0 ? (
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8 border border-slate-200 dark:border-slate-700 text-center text-slate-500">
-            {isAdmin ? 'No sessions yet. Create one above.' : 'No sessions available. Ask an administrator to create one.'}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {sessions.map(session => (
-              <button
-                key={session.id}
-                onClick={() => router.push(`/scan/${session.id}`)}
-                className="w-full text-left bg-white dark:bg-slate-800 rounded-xl shadow-lg p-4 border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
-              >
-                <p className="font-semibold text-slate-800 dark:text-slate-100">{session.name}</p>
-                <p className="text-xs text-slate-500 mt-1">
-                  Created {new Date(session.created_at).toLocaleString()}
-                </p>
-              </button>
-            ))}
-          </div>
+          </section>
         )}
-      </div>
+      </main>
     </div>
   );
 }

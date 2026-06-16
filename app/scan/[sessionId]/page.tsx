@@ -11,6 +11,12 @@ import { ProgressCard } from '@/components/ProgressCard';
 import { ItemList } from '@/components/ItemList';
 import { ScanResult } from '@/lib/types';
 
+const RESULT_STYLE = {
+  success: 'border-l-2 border-neutral-900 bg-neutral-50',
+  duplicate: 'border-l-2 border-neutral-300 bg-neutral-50',
+  not_found: 'border-l-2 border-neutral-200 bg-neutral-50',
+} as const;
+
 function ScannerPage({ user }: { user: User }) {
   const params = useParams();
   const sessionId = params.sessionId as string;
@@ -32,31 +38,21 @@ function ScannerPage({ user }: { user: User }) {
         setSessionName(session.name);
         const items = await db.getItems(sessionId);
         setItems(items);
-      } catch (err) {
-        console.error('Failed to load session', err);
+      } catch {
         router.push('/');
       } finally {
         setLoading(false);
       }
     };
-
     loadSession();
   }, [sessionId, router, setItems]);
 
   useEffect(() => {
     const channel = db.subscribeToItems(sessionId, (payload) => {
-      if (payload.eventType === 'UPDATE') {
-        updateItem(payload.new as any);
-      }
+      if (payload.eventType === 'UPDATE') updateItem(payload.new as any);
     });
-
-    channel.subscribe((status: string) => {
-      setIsConnected(status === 'SUBSCRIBED');
-    });
-
-    return () => {
-      channel.unsubscribe();
-    };
+    channel.subscribe((status: string) => setIsConnected(status === 'SUBSCRIBED'));
+    return () => { channel.unsubscribe(); };
   }, [sessionId, updateItem]);
 
   const handleScanComplete = (result: ScanResult) => {
@@ -66,13 +62,11 @@ function ScannerPage({ user }: { user: User }) {
       message: result.message,
       timestamp: Date.now(),
     });
-    if (result.success && result.item) {
-      updateItem(result.item);
-    }
+    if (result.success && result.item) updateItem(result.item);
   };
 
   const handleReset = async () => {
-    if (!confirm('Reset all scan status for this session? This cannot be undone.')) return;
+    if (!confirm('Reset all scan status? This cannot be undone.')) return;
     setIsResetting(true);
     try {
       await db.resetSession(sessionId);
@@ -86,95 +80,83 @@ function ScannerPage({ user }: { user: User }) {
     }
   };
 
-  const handleSignOut = async () => {
-    await auth.signOut();
-    router.push('/login');
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+        <div className="w-5 h-5 border-2 border-neutral-300 border-t-neutral-900 rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-900 dark:to-slate-800 py-8 px-4">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
+    <div className="min-h-screen bg-neutral-50">
+      {/* Header */}
+      <header className="bg-white border-b border-neutral-200 px-4 py-3.5 sticky top-0 z-10">
+        <div className="max-w-2xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => router.push('/')}
-              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 mb-2 inline-flex items-center"
+              className="text-neutral-400 hover:text-neutral-900 transition-colors flex-shrink-0"
+              aria-label="Back"
             >
-              ← Back to Dashboard
+              ←
             </button>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{sessionName}</h1>
+            <p className="text-sm font-medium text-neutral-900 truncate">{sessionName}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-shrink-0 ml-4">
             {isAdmin && (
               <>
                 <button
                   onClick={handleReset}
                   disabled={isResetting}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 text-white rounded-lg text-sm font-medium transition-colors"
+                  className="text-xs text-neutral-500 hover:text-neutral-900 border border-neutral-200 hover:border-neutral-400 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-40"
                 >
-                  {isResetting ? 'Resetting...' : 'Reset Session'}
+                  {isResetting ? 'Resetting…' : 'Reset'}
                 </button>
                 <a
                   href={`/api/export/${sessionId}`}
                   download
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  className="text-xs text-neutral-500 hover:text-neutral-900 border border-neutral-200 hover:border-neutral-400 px-2.5 py-1.5 rounded-lg transition-colors"
                 >
-                  Export CSV
+                  Export
                 </a>
               </>
             )}
             <button
-              onClick={handleSignOut}
-              className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+              onClick={async () => { await auth.signOut(); router.push('/login'); }}
+              className="text-xs text-neutral-400 hover:text-neutral-900 transition-colors"
             >
               Sign out
             </button>
           </div>
         </div>
+      </header>
 
-        <div className="grid lg:grid-cols-2 gap-6">
-          <div>
-            <Scanner sessionId={sessionId} user={user} onScanComplete={handleScanComplete} />
+      {/* Content */}
+      <main className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+        {/* Progress always at top */}
+        <ProgressCard progress={progress} isConnected={isConnected} />
+
+        {/* Last scan result */}
+        {lastScan && (
+          <div className={`px-4 py-3.5 rounded-xl ${RESULT_STYLE[lastScan.result]}`}>
+            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500 mb-0.5">
+              {lastScan.result === 'success' ? 'Scanned' : lastScan.result === 'duplicate' ? 'Duplicate' : 'Not found'}
+            </p>
+            <p className="text-sm font-medium text-neutral-900">{lastScan.message}</p>
+            <p className="text-xs text-neutral-400 mt-0.5">
+              {new Date(lastScan.timestamp).toLocaleTimeString()}
+            </p>
           </div>
+        )}
 
-          <div className="space-y-6">
-            <ProgressCard progress={progress} isConnected={isConnected} />
-
-            {lastScan && (
-              <div
-                className={`rounded-xl shadow-lg p-6 border ${
-                  lastScan.result === 'success'
-                    ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
-                    : lastScan.result === 'duplicate'
-                      ? 'bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800'
-                      : 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
-                }`}
-              >
-                <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Last Scan
-                </h3>
-                <p className="text-lg font-semibold">{lastScan.message}</p>
-                <p className="text-xs text-slate-500 mt-1">
-                  {new Date(lastScan.timestamp).toLocaleTimeString()}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-6">
+        {/* Scanner + item list: stack on mobile, side by side on lg */}
+        <div className="lg:grid lg:grid-cols-2 lg:gap-4 space-y-4 lg:space-y-0">
+          <Scanner sessionId={sessionId} user={user} onScanComplete={handleScanComplete} />
           <ItemList />
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
 

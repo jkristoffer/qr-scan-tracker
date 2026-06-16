@@ -17,11 +17,10 @@ export default function LoginPage() {
     e.preventDefault();
     setMessage(null);
     setLoading(true);
-
     try {
       if (isSignUp) {
         await auth.signUp(email, password, role);
-        setMessage({ text: 'Account created. Check your email to confirm, then sign in.', type: 'info' });
+        setMessage({ text: 'Account created. Confirm your email, then sign in.', type: 'info' });
         setIsSignUp(false);
       } else {
         await auth.signIn(email, password);
@@ -35,91 +34,89 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">QR Scan Tracker</h1>
-          <p className="text-slate-600 dark:text-slate-300 mt-2">
-            {isSignUp ? 'Create an account' : 'Sign in to continue'}
+    <div className="min-h-screen bg-neutral-50 flex items-center justify-center px-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-8">
+          <p className="text-xs font-semibold tracking-widest uppercase text-neutral-400 mb-2">
+            QR Scan Tracker
           </p>
+          <h1 className="text-2xl font-semibold text-neutral-900 tracking-tight">
+            {isSignUp ? 'Create account' : 'Welcome back'}
+          </h1>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-200 dark:border-slate-700">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
-              />
-            </div>
-
-            {isSignUp && (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Role
-                </label>
-                <select
-                  value={role}
-                  onChange={e => setRole(e.target.value as 'admin' | 'scanner')}
-                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-white"
-                >
-                  <option value="scanner">Scanner</option>
-                  <option value="admin">Administrator</option>
-                </select>
-              </div>
-            )}
-
-            {message && (
-              <div
-                className={`p-3 rounded-lg border text-sm ${
-                  message.type === 'error'
-                    ? 'bg-red-50 border-red-200 text-red-600 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400'
-                    : 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400'
-                }`}
-              >
-                {message.text}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors"
-            >
-              {loading ? 'Please wait...' : isSignUp ? 'Create Account' : 'Sign In'}
-            </button>
-          </form>
-
-          <div className="mt-4 text-center">
-            <button
-              onClick={() => { setIsSignUp(!isSignUp); setMessage(null); }}
-              className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-            </button>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-neutral-500 mb-1.5 uppercase tracking-wide">
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              placeholder="you@example.com"
+              className="w-full px-3 py-2.5 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-900 focus:border-neutral-900"
+            />
           </div>
-        </div>
+
+          <div>
+            <label className="block text-xs font-medium text-neutral-500 mb-1.5 uppercase tracking-wide">
+              Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              minLength={6}
+              placeholder="••••••••"
+              className="w-full px-3 py-2.5 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-900 focus:border-neutral-900"
+            />
+          </div>
+
+          {isSignUp && (
+            <div>
+              <label className="block text-xs font-medium text-neutral-500 mb-1.5 uppercase tracking-wide">
+                Role
+              </label>
+              <select
+                value={role}
+                onChange={e => setRole(e.target.value as 'admin' | 'scanner')}
+                className="w-full px-3 py-2.5 bg-white border border-neutral-200 rounded-lg text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900 focus:border-neutral-900"
+              >
+                <option value="scanner">Scanner</option>
+                <option value="admin">Administrator</option>
+              </select>
+            </div>
+          )}
+
+          {message && (
+            <p className={`text-sm py-2.5 px-3 rounded-lg border ${
+              message.type === 'error'
+                ? 'text-neutral-700 bg-neutral-100 border-neutral-200'
+                : 'text-neutral-600 bg-neutral-50 border-neutral-200'
+            }`}>
+              {message.text}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2.5 bg-neutral-900 hover:bg-neutral-700 disabled:bg-neutral-300 text-white text-sm font-medium rounded-lg transition-colors mt-1"
+          >
+            {loading ? 'Please wait…' : isSignUp ? 'Create account' : 'Sign in'}
+          </button>
+        </form>
+
+        <button
+          onClick={() => { setIsSignUp(!isSignUp); setMessage(null); }}
+          className="mt-4 w-full text-center text-sm text-neutral-500 hover:text-neutral-900 transition-colors"
+        >
+          {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+        </button>
       </div>
-    </main>
+    </div>
   );
 }

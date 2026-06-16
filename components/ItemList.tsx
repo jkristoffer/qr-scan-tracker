@@ -3,69 +3,54 @@
 import { useScanStore } from '@/store/useScanStore';
 
 export function ItemList() {
-  const { filteredItems, searchQuery, setSearchQuery, progress } =
-    useScanStore();
+  const { filteredItems, searchQuery, setSearchQuery, progress } = useScanStore();
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-      <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+    <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+      {/* Search */}
+      <div className="px-4 py-3 border-b border-neutral-100">
         <input
           type="text"
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search by barcode or name..."
-          className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Search barcode or name…"
+          className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-900 focus:border-neutral-900"
         />
-        <p className="text-xs text-slate-500 mt-2">
-          Showing {filteredItems.length} of {progress.total} items
-        </p>
+        {searchQuery && (
+          <p className="text-xs text-neutral-400 mt-1.5">
+            {filteredItems.length} of {progress.total} items
+          </p>
+        )}
       </div>
 
-      <div className="max-h-96 overflow-y-auto">
+      {/* List */}
+      <div className="max-h-[420px] overflow-y-auto divide-y divide-neutral-100">
         {filteredItems.length === 0 ? (
-          <div className="p-8 text-center text-slate-500">
-            No items found
+          <div className="py-10 text-center text-sm text-neutral-400">
+            {searchQuery ? 'No items match your search' : 'No items'}
           </div>
         ) : (
-          <table className="w-full">
-            <thead className="bg-slate-50 dark:bg-slate-900/50 sticky top-0">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                  Barcode
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                  Name
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-              {filteredItems.map((item) => (
-                <tr
-                  key={item.id}
-                  className={item.scanned ? 'bg-green-50 dark:bg-green-900/10' : ''}
-                >
-                  <td className="px-4 py-3 text-sm font-mono text-slate-700 dark:text-slate-300">
-                    {item.barcode}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
-                    {item.name}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {item.scanned ? (
-                      <span className="inline-flex items-center text-green-600">
-                        ✓ {item.scanned_by || 'Unknown'}
-                      </span>
-                    ) : (
-                      <span className="text-slate-500">Pending</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          filteredItems.map(item => (
+            <div
+              key={item.id}
+              className="flex items-center justify-between px-4 py-3 gap-4"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-mono text-neutral-600 truncate">{item.barcode}</p>
+                <p className="text-sm text-neutral-900 truncate">{item.name}</p>
+              </div>
+              <div className="flex-shrink-0 text-right">
+                {item.scanned ? (
+                  <div>
+                    <p className="text-xs font-medium text-neutral-900">✓ Scanned</p>
+                    <p className="text-xs text-neutral-400 mt-0.5">{item.scanned_by}</p>
+                  </div>
+                ) : (
+                  <span className="text-xs text-neutral-300">Pending</span>
+                )}
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>

@@ -28,40 +28,32 @@ export function Scanner({ sessionId, user, onScanComplete }: ScannerProps) {
 
   const startScanning = async () => {
     if (!scannedBy.trim()) {
-      setError('Please enter your name first');
+      setError('Enter your name to continue');
       return;
     }
-
     setError(null);
     setIsScanning(true);
-
     try {
-      const scanner = new Html5Qrcode('scanner');
+      const scanner = new Html5Qrcode('scanner-preview');
       scannerRef.current = scanner;
-
       await scanner.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
+        { fps: 10, qrbox: { width: 240, height: 240 } },
         async (decodedText) => {
           await scanner.pause();
           try {
             const result = await processScan(decodedText, scannedBy);
             onScanComplete(result);
-            setTimeout(() => scanner.resume(), 1500);
           } catch (err) {
-            setError(err instanceof Error ? err.message : 'Scan processing failed');
-            setTimeout(() => scanner.resume(), 1500);
+            setError(err instanceof Error ? err.message : 'Scan failed');
           }
+          setTimeout(() => scanner.resume(), 1500);
         },
-        () => {
-          // Frame errors are normal between reads
-        }
+        () => {}
       );
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to start camera. Please ensure camera permissions are granted.'
+        err instanceof Error ? err.message : 'Could not start camera. Check permissions.'
       );
       setIsScanning(false);
     }
@@ -77,78 +69,70 @@ export function Scanner({ sessionId, user, onScanComplete }: ScannerProps) {
 
   const processScan = async (barcode: string, user: string): Promise<ScanResult> => {
     const item = await db.getItemByBarcode(sessionId, barcode);
-
     if (!item) {
-      return { success: false, message: `Barcode Not Found: ${barcode}`, type: 'not_found' };
+      return { success: false, message: `Not found: ${barcode}`, type: 'not_found' };
     }
-
     if (item.scanned) {
       return {
-        success: false,
-        item,
-        message: `Already Scanned by ${item.scanned_by} at ${new Date(item.scanned_at || '').toLocaleTimeString()}`,
+        success: false, item,
+        message: `Already scanned by ${item.scanned_by} at ${new Date(item.scanned_at || '').toLocaleTimeString()}`,
         type: 'duplicate',
       };
     }
-
     const scanned = await db.scanItem(item.id, user);
-
     if (!scanned) {
       const freshItem = await db.getItemByBarcode(sessionId, barcode);
-      return {
-        success: false,
-        item: freshItem || undefined,
-        message: 'Already Scanned (just now by someone else)',
-        type: 'duplicate',
-      };
+      return { success: false, item: freshItem || undefined, message: 'Just scanned by someone else', type: 'duplicate' };
     }
-
-    return { success: true, item: scanned, message: `✓ Scanned: ${scanned.name}`, type: 'success' };
+    return { success: true, item: scanned, message: scanned.name, type: 'success' };
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-200 dark:border-slate-700">
-      <div className="mb-4">
-        <label
-          htmlFor="scannerName"
-          className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
-        >
-          Your Name
+    <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+      {/* Name field */}
+      <div className="px-4 pt-4 pb-3 border-b border-neutral-100">
+        <label className="block text-xs font-medium text-neutral-500 uppercase tracking-wide mb-1.5">
+          Your name
         </label>
         <input
           type="text"
-          id="scannerName"
           value={scannedBy}
           onChange={e => setScannedBy(e.target.value)}
-          placeholder="Enter your name"
           disabled={isScanning}
-          className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white disabled:opacity-50"
+          placeholder="Display name for scans"
+          className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-900 focus:border-neutral-900 disabled:opacity-50"
         />
       </div>
 
-      {!isScanning ? (
-        <button
-          onClick={startScanning}
-          className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-        >
-          Start Camera
-        </button>
-      ) : (
-        <button
-          onClick={stopScanning}
-          className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors"
-        >
-          Stop Camera
-        </button>
-      )}
+      {/* Camera preview */}
+      <div
+        id="scanner-preview"
+        className="bg-neutral-900 aspect-square w-full"
+      />
 
-      {error && (
-        <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-        </div>
-      )}
-
-      <div id="scanner" className="mt-4 rounded-lg overflow-hidden bg-black aspect-square" />
+      {/* Controls */}
+      <div className="p-4 space-y-3">
+        {error && (
+          <p className="text-xs text-neutral-600 bg-neutral-100 border border-neutral-200 px-3 py-2 rounded-lg">
+            {error}
+          </p>
+        )}
+        {!isScanning ? (
+          <button
+            onClick={startScanning}
+            className="w-full py-3 bg-neutral-900 hover:bg-neutral-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            Start scanning
+          </button>
+        ) : (
+          <button
+            onClick={stopScanning}
+            className="w-full py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-900 text-sm font-medium rounded-lg transition-colors"
+          >
+            Stop scanning
+          </button>
+        )}
+      </div>
     </div>
   );
 }
