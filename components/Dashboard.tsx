@@ -15,8 +15,19 @@ export function Dashboard() {
   const [uploadLabel, setUploadLabel] = useState<{ title: string; sub: string }>({ title: 'Upload guest list', sub: 'CSV or TXT, one name per line' });
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [creating, setCreating] = useState(false);
+  const [gateName, setGateName] = useState('');
   const router = useRouter();
   const sheetRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('gate_name');
+    setGateName(stored ?? 'Main Gate');
+  }, []);
+
+  const handleGateNameChange = (val: string) => {
+    setGateName(val);
+    localStorage.setItem('gate_name', val);
+  };
 
   useEffect(() => {
     db.listSessions().then(async (list) => {
@@ -76,6 +87,17 @@ export function Dashboard() {
           </div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.22em', color: '#9a9a96', marginTop: 9 }}>
             DOOR SCANNER · CHECK-IN
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.18em', color: '#b4b4b0', flexShrink: 0 }}>GATE</div>
+            <input
+              value={gateName}
+              onChange={e => handleGateNameChange(e.target.value)}
+              placeholder="Main Gate"
+              style={{ flex: 1, border: '1px solid #dcdcd8', background: '#fff', borderRadius: 9, padding: '8px 11px', fontSize: 14, fontFamily: "'Helvetica Neue', Helvetica, sans-serif", outline: 'none', color: '#161618' }}
+              onFocus={e => (e.target.style.borderColor = '#161618')}
+              onBlur={e => (e.target.style.borderColor = '#dcdcd8')}
+            />
           </div>
         </div>
 

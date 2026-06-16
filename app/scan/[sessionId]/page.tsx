@@ -38,14 +38,21 @@ export default function ScannerPage() {
   const sessionId = params.sessionId as string;
   const router = useRouter();
 
-  const { items, setItems, updateItem, progress, setLastScan } = useScanStore();
+  const { setItems, updateItem, progress, setLastScan } = useScanStore();
 
   const [loading, setLoading] = useState(true);
   const [sessionName, setSessionName] = useState('');
+  const [gateName, setGateName] = useState('This gate');
   const [isConnected, setIsConnected] = useState(false);
   const [flood, setFlood] = useState<ScanResultFlood | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [listFull, setListFull] = useState(false);
   const floodTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const name = localStorage.getItem('gate_name');
+    if (name) setGateName(name);
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -98,28 +105,6 @@ export default function ScannerPage() {
     });
   }, [setLastScan, updateItem, showFlood]);
 
-  const demoScan = useCallback((type: 'admit' | 'already' | 'nomatch') => {
-    beep(type); buzz(type);
-    if (type === 'admit') {
-      const pend = items.filter(i => !i.scanned);
-      if (pend.length === 0) { showFlood({ type: 'nomatch', name: 'Ticket not recognised', sub: 'Code DEMO-0000' }); return; }
-      const g = pend[Math.floor(Math.random() * pend.length)];
-      db.scanItem(g.id, 'Demo').then(scanned => {
-        if (scanned) {
-          updateItem(scanned);
-          setLastScan({ barcode: scanned.barcode, result: 'success', message: scanned.name, timestamp: Date.now() });
-          showFlood({ type: 'admit', name: scanned.name, sub: scanned.barcode });
-        }
-      });
-    } else if (type === 'already') {
-      const ins = items.filter(i => i.scanned);
-      const g = ins.length ? ins[Math.floor(Math.random() * ins.length)] : items[0];
-      if (g) showFlood({ type: 'already', name: g.name, sub: `Entered earlier · ${g.scanned_by ?? 'Gate'}` });
-    } else {
-      showFlood({ type: 'nomatch', name: 'Ticket not recognised', sub: 'Code DEMO-' + Math.floor(1000 + Math.random() * 9000) });
-    }
-  }, [items, updateItem, setLastScan, showFlood]);
-
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -127,6 +112,8 @@ export default function ScannerPage() {
       </div>
     );
   }
+
+  const showPanel = panelOpen || listFull;
 
   return (
     <div style={{ minHeight: '100vh', background: '#000', display: 'flex', justifyContent: 'center', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
@@ -142,7 +129,7 @@ export default function ScannerPage() {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sessionName}</div>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.1em', color: '#9a9a96', marginTop: 2 }}>This gate</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.1em', color: '#9a9a96', marginTop: 2 }}>{gateName}</div>
           </div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: '#161618', border: '1px solid #e2e2de', borderRadius: 999, padding: '5px 10px', flexShrink: 0 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: isConnected ? 'oklch(0.74 0.17 152)' : '#c2c2be', animation: isConnected ? 'liveDot 1.4s ease-in-out infinite' : 'none' }} />
@@ -150,30 +137,48 @@ export default function ScannerPage() {
           </div>
         </div>
 
-        {/* Camera hero */}
-        <Scanner sessionId={sessionId} onScanComplete={handleScanComplete} />
-
-        {/* Pull tab */}
-        <div
-          onClick={() => setPanelOpen(o => !o)}
-          style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 16px', background: '#fbfbfa', borderTop: '1px solid #ececea', cursor: 'pointer', userSelect: 'none' }}
-        >
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.16em', color: '#9a9a96' }}>
-            {panelOpen ? 'HIDE LIST' : `${progress.scanned}/${progress.total} · SHOW LIST`}
-          </div>
-          <span style={{ fontSize: 12, color: '#b4b4b0', display: 'inline-block', transform: panelOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+        {/* Camera hero — hidden when list is fullscreen */}
+        <div style={{ display: listFull ? 'none' : 'contents' }}>
+          <Scanner sessionId={sessionId} onScanComplete={handleScanComplete} />
         </div>
 
+        {/* Pull tab */}
+        {listFull ? (
+          /* In list-full mode: single back-to-camera button */
+          <div
+            onClick={() => setListFull(false)}
+            style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 16px', background: '#fbfbfa', borderTop: '1px solid #ececea', borderBottom: '1px solid #ececea', cursor: 'pointer', userSelect: 'none' }}
+          >
+            <span style={{ fontSize: 12, color: '#b4b4b0' }}>▲</span>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.16em', color: '#9a9a96' }}>BACK TO CAMERA</div>
+          </div>
+        ) : (
+          /* Normal mode: hide/show list toggle + expand list button */
+          <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 4px', background: '#fbfbfa', borderTop: '1px solid #ececea' }}>
+            <div
+              onClick={() => setPanelOpen(o => !o)}
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}
+            >
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.16em', color: '#9a9a96' }}>
+                {panelOpen ? 'HIDE LIST' : `${progress.scanned}/${progress.total} · SHOW LIST`}
+              </div>
+              <span style={{ fontSize: 12, color: '#b4b4b0', display: 'inline-block', transform: panelOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+            </div>
+            <div style={{ width: 1, height: 20, background: '#e2e2de', flexShrink: 0 }} />
+            <div
+              onClick={() => { setListFull(true); setPanelOpen(true); }}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 14px', cursor: 'pointer', userSelect: 'none' }}
+            >
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.16em', color: '#9a9a96' }}>LIST</div>
+              <span style={{ fontSize: 11, color: '#b4b4b0' }}>⤢</span>
+            </div>
+          </div>
+        )}
+
         {/* Collapsible panel */}
-        {panelOpen && (
+        {showPanel && (
           <>
-            <ProgressCard
-              progress={progress}
-              isConnected={isConnected}
-              onDemoAdmit={() => demoScan('admit')}
-              onDemoAlready={() => demoScan('already')}
-              onDemoNoMatch={() => demoScan('nomatch')}
-            />
+            <ProgressCard progress={progress} isConnected={isConnected} />
             <ItemList />
           </>
         )}

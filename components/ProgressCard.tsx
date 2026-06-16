@@ -5,12 +5,9 @@ import { Progress } from '@/lib/types';
 interface ProgressCardProps {
   progress: Progress;
   isConnected: boolean;
-  onDemoAdmit?: () => void;
-  onDemoAlready?: () => void;
-  onDemoNoMatch?: () => void;
 }
 
-export function ProgressCard({ progress, isConnected, onDemoAdmit, onDemoAlready, onDemoNoMatch }: ProgressCardProps) {
+export function ProgressCard({ progress, isConnected }: ProgressCardProps) {
   const pct = Math.round(progress.percentage);
 
   return (
@@ -34,16 +31,8 @@ export function ProgressCard({ progress, isConnected, onDemoAdmit, onDemoAlready
         <div style={{ height: '100%', width: `${pct}%`, background: '#161618', borderRadius: 999, transition: 'width 0.4s cubic-bezier(0.16,1,0.3,1)' }} />
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 11 }}>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#8c8c88' }}>
-          {Math.max(0, progress.total - progress.scanned)} still expected
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: '0.14em', color: '#b4b4b0' }}>DEMO</span>
-          <button onClick={onDemoAdmit} style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid #d8d8d4', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'oklch(0.6 0.16 152)', fontSize: 15, fontWeight: 700 }}>✓</button>
-          <button onClick={onDemoAlready} style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid #d8d8d4', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'oklch(0.62 0.15 70)', fontSize: 15, fontWeight: 700 }}>!</button>
-          <button onClick={onDemoNoMatch} style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid #d8d8d4', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'oklch(0.58 0.2 26)', fontSize: 15, fontWeight: 700 }}>✕</button>
-        </div>
+      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#8c8c88', marginTop: 11 }}>
+        {Math.max(0, progress.total - progress.scanned)} still expected
       </div>
     </div>
   );
