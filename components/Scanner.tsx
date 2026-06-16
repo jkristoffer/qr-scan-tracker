@@ -36,7 +36,7 @@ export function Scanner({ sessionId, onScanComplete }: ScannerProps) {
       const scanner = new Html5Qrcode('scanner-hero');
       scannerRef.current = scanner;
       await scanner.start(
-        { facingMode: 'environment' },
+        { facingMode: 'environment', width: { ideal: 720 }, height: { ideal: 1280 } },
         { fps: 10 },
         async (decodedText) => {
           try { scanner.pause(); } catch {}
