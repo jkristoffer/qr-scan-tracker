@@ -96,20 +96,24 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
   }, []);
 
   const processScan = async (barcode: string): Promise<ScanResult> => {
+    const gateName = localStorage.getItem('gate_name') || 'Gate';
     const item = await db.getItemByBarcode(sessionId, barcode);
     if (!item) return { success: false, message: 'Not found', type: 'not_found' };
     if (item.scanned) {
+      db.logScanAttempt(item.id, sessionId, gateName, true);
       return {
         success: false, item,
-        message: `Already checked in by ${item.scanned_by}`,
+        message: `Already checked in${item.scanned_by ? ` · ${item.scanned_by}` : ''}`,
         type: 'duplicate',
       };
     }
-    const scanned = await db.scanItem(item.id, 'Gate');
+    const scanned = await db.scanItem(item.id, gateName);
     if (!scanned) {
+      db.logScanAttempt(item.id, sessionId, gateName, true);
       const fresh = await db.getItemByBarcode(sessionId, barcode);
       return { success: false, item: fresh || undefined, message: 'Just checked in by another gate', type: 'duplicate' };
     }
+    db.logScanAttempt(item.id, sessionId, gateName, false);
     return { success: true, item: scanned, message: scanned.name, type: 'success' };
   };
 

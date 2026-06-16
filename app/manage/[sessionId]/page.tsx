@@ -273,7 +273,7 @@ export default function ManagePage() {
                     {card.item.scanned && (
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 5, background: 'oklch(0.95 0.05 152)', borderRadius: 6, padding: '3px 8px' }}>
                         <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.12em', color: 'oklch(0.45 0.14 152)', fontWeight: 700 }}>
-                          CHECKED IN{checkinTime ? ` · ${checkinTime}` : ''}
+                          CHECKED IN{checkinTime ? ` · ${checkinTime}` : ''}{card.item.scanned_by ? ` · ${card.item.scanned_by}` : ''}
                         </span>
                       </div>
                     )}

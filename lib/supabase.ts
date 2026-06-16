@@ -169,6 +169,12 @@ export const db = {
     return data;
   },
 
+  async logScanAttempt(itemId: string, sessionId: string, gateName: string, isDuplicate: boolean) {
+    await getClient()
+      .from('scan_attempts')
+      .insert({ item_id: itemId, session_id: sessionId, gate_name: gateName, is_duplicate: isDuplicate });
+  },
+
   async deleteItem(itemId: string) {
     const { error } = await getClient()
       .from('items')
