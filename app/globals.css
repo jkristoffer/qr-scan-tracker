@@ -6,6 +6,14 @@
 
 /* Hide html5-qrcode's scan region overlay — we use our own reticle */
 #qr-shaded-region { display: none !important; }
+/* Make the camera video fill the scanner container in all orientations */
+#scanner-hero video {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
 html, body { margin: 0; padding: 0; background: #000; }
 body { -webkit-font-smoothing: antialiased; }
 ::-webkit-scrollbar { width: 0; height: 0; }

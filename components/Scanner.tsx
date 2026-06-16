@@ -39,7 +39,7 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
       scannerRef.current = scanner;
       await scanner.start(
         { facingMode: 'environment' },
-        { fps: 10, videoConstraints: { facingMode: 'environment', width: { ideal: 720 }, height: { ideal: 1280 } } },
+        { fps: 10, videoConstraints: { facingMode: 'environment', aspectRatio: { ideal: 9 / 16 } } },
         async (decodedText) => {
           try { scanner.pause(); } catch {}
           try {
