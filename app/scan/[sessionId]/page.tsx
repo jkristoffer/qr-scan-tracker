@@ -137,10 +137,8 @@ export default function ScannerPage() {
           </div>
         </div>
 
-        {/* Camera hero — hidden when list is fullscreen */}
-        <div style={{ display: listFull ? 'none' : 'contents' }}>
-          <Scanner sessionId={sessionId} onScanComplete={handleScanComplete} />
-        </div>
+        {/* Camera hero — collapsed (not unmounted) when list is fullscreen */}
+        <Scanner sessionId={sessionId} onScanComplete={handleScanComplete} hidden={listFull} />
 
         {/* Pull tab */}
         {listFull ? (

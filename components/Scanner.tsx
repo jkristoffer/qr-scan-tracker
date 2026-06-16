@@ -8,11 +8,12 @@ import { ScanResult } from '@/lib/types';
 interface ScannerProps {
   sessionId: string;
   onScanComplete: (result: ScanResult) => void;
+  hidden?: boolean;
 }
 
 type CamStatus = 'idle' | 'loading' | 'live' | 'denied';
 
-export function Scanner({ sessionId, onScanComplete }: ScannerProps) {
+export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isRunning = useRef(false);
   const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -87,7 +88,7 @@ export function Scanner({ sessionId, onScanComplete }: ScannerProps) {
   return (
     <div
       onClick={camStatus === 'denied' ? handleTap : undefined}
-      style={{ position: 'relative', flex: '1.35', minHeight: 230, background: '#0b0b0d', overflow: 'hidden', cursor: camStatus === 'denied' ? 'pointer' : 'default' }}
+      style={{ position: 'relative', flex: hidden ? '0 0 0' : '1.35', minHeight: hidden ? 0 : 230, height: hidden ? 0 : undefined, background: '#0b0b0d', overflow: 'hidden', cursor: camStatus === 'denied' ? 'pointer' : 'default' }}
     >
       {/* html5-qrcode renders video inside this div */}
       <div id="scanner-hero" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
