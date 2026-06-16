@@ -18,6 +18,7 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
   const isRunning = useRef(false);
   const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [camStatus, setCamStatus] = useState<CamStatus>('idle');
+  const [camError, setCamError] = useState<string>('');
 
   useEffect(() => {
     startScanning();
@@ -55,16 +56,17 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
       );
       isRunning.current = true;
       setCamStatus('live');
-    } catch {
+    } catch (err: any) {
+      setCamError(String(err?.message || err || 'Unknown error'));
       setCamStatus('denied');
     }
   };
 
-  const handleTap = async () => {
-    if (camStatus === 'denied') {
-      // demo tap: simulate a random scan via callback with a fake result
-      // The parent page handles demo scanning; here we just indicate camera is unavailable.
-    }
+  const handleRetry = () => {
+    if (scannerRef.current && isRunning.current) return;
+    setCamStatus('idle');
+    setCamError('');
+    startScanning();
   };
 
   const processScan = async (barcode: string): Promise<ScanResult> => {
@@ -87,8 +89,7 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
 
   return (
     <div
-      onClick={camStatus === 'denied' ? handleTap : undefined}
-      style={{ position: 'relative', flex: hidden ? '0 0 0' : '1.35', minHeight: hidden ? 0 : 230, height: hidden ? 0 : undefined, background: '#0b0b0d', overflow: 'hidden', cursor: camStatus === 'denied' ? 'pointer' : 'default' }}
+      style={{ position: 'relative', flex: hidden ? '0 0 0' : '1.35', minHeight: hidden ? 0 : 230, height: hidden ? 0 : undefined, background: '#0b0b0d', overflow: 'hidden' }}
     >
       {/* html5-qrcode renders video inside this div */}
       <div id="scanner-hero" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
@@ -101,7 +102,17 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 28, textAlign: 'center' }}>
           <div style={{ width: 52, height: 52, borderRadius: '50%', border: '2px solid #5a5a5e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, color: '#9a9a9e' }}>⃠</div>
           <div style={{ color: '#e8e8e6', fontSize: 15, fontWeight: 600 }}>Camera unavailable</div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#8a8a8e', maxWidth: 230 }}>Allow camera access to scan tickets.</div>
+          {camError ? (
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#6a6a6e', maxWidth: 280, wordBreak: 'break-all' }}>{camError}</div>
+          ) : (
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#8a8a8e', maxWidth: 230 }}>Allow camera access in Settings, then tap Retry.</div>
+          )}
+          <div
+            onClick={handleRetry}
+            style={{ marginTop: 6, padding: '10px 24px', background: '#fff', color: '#161618', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+          >
+            Retry
+          </div>
         </div>
       )}
       {(camStatus === 'idle' || camStatus === 'loading') && (
