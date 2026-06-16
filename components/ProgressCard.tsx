@@ -1,61 +1,26 @@
 'use client';
 
 import { Progress } from '@/lib/types';
-import { useEffect, useState } from 'react';
-import { db } from '@/lib/supabase';
 
 interface ProgressCardProps {
   progress: Progress;
-  sessionId: string;
+  isConnected: boolean;
 }
 
-export function ProgressCard({ progress, sessionId }: ProgressCardProps) {
-  const [isConnected, setIsConnected] = useState(true);
-
-  useEffect(() => {
-    // Subscribe to realtime updates
-    const channel = db.subscribeToItems(sessionId, (payload) => {
-      // The store will handle the actual update via the parent component
-      // This is just to show connection status
-      setIsConnected(true);
-    });
-
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        setIsConnected(true);
-      } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-        setIsConnected(false);
-      }
-    });
-
-    return () => {
-      channel.unsubscribe();
-    };
-  }, [sessionId]);
-
+export function ProgressCard({ progress, isConnected }: ProgressCardProps) {
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-200 dark:border-slate-700">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-          Progress
-        </h2>
+        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Progress</h2>
         <div className="flex items-center gap-2">
-          <div
-            className={`w-2 h-2 rounded-full ${
-              isConnected ? 'bg-green-500' : 'bg-red-500'
-            }`}
-          />
-          <span className="text-xs text-slate-500">
-            {isConnected ? 'Live' : 'Offline'}
-          </span>
+          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+          <span className="text-xs text-slate-500">{isConnected ? 'Live' : 'Offline'}</span>
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="text-center">
-          <p className="text-3xl font-bold text-slate-800 dark:text-slate-100">
-            {progress.total}
-          </p>
+          <p className="text-3xl font-bold text-slate-800 dark:text-slate-100">{progress.total}</p>
           <p className="text-xs text-slate-500">Total</p>
         </div>
         <div className="text-center">
@@ -63,9 +28,7 @@ export function ProgressCard({ progress, sessionId }: ProgressCardProps) {
           <p className="text-xs text-slate-500">Scanned</p>
         </div>
         <div className="text-center">
-          <p className="text-3xl font-bold text-amber-600">
-            {progress.remaining}
-          </p>
+          <p className="text-3xl font-bold text-amber-600">{progress.remaining}</p>
           <p className="text-xs text-slate-500">Remaining</p>
         </div>
       </div>

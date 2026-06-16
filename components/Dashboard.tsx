@@ -1,19 +1,32 @@
 'use client';
 
-import { useState } from 'react';
-import { db } from '@/lib/supabase';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { User } from '@supabase/supabase-js';
+import { auth, db } from '@/lib/supabase';
+import { ScanSession } from '@/lib/types';
 
-export function Dashboard() {
+interface DashboardProps {
+  user: User;
+}
+
+export function Dashboard({ user }: DashboardProps) {
   const [sessionName, setSessionName] = useState('');
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<ScanSession[]>([]);
   const router = useRouter();
+
+  const isAdmin = user.user_metadata?.role === 'admin';
+
+  useEffect(() => {
+    db.listSessions().then(setSessions).catch(console.error);
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && file.type === 'text/csv') {
+    if (file && (file.type === 'text/csv' || file.name.endsWith('.csv'))) {
       setCsvFile(file);
       setError(null);
     } else {
@@ -31,26 +44,16 @@ export function Dashboard() {
     setError(null);
 
     try {
-      // Read and parse CSV
       const text = await csvFile.text();
-      const lines = text.split('\n').filter((line) => line.trim());
-
-      // Skip header row, expect format: barcode,name
-      const items = lines.slice(1).map((line) => {
-        const [barcode, name] = line.split(',').map((s) => s.trim());
-        if (!barcode || !name) {
-          throw new Error(`Invalid CSV format at line: ${line}`);
-        }
+      const lines = text.split('\n').filter(line => line.trim());
+      const items = lines.slice(1).map(line => {
+        const [barcode, name] = line.split(',').map(s => s.trim());
+        if (!barcode || !name) throw new Error(`Invalid CSV format at line: ${line}`);
         return { barcode, name };
       });
 
-      // Create session
       const session = await db.createSession(sessionName);
-
-      // Create items
       await db.createItems(items, session.id);
-
-      // Navigate to scanner
       router.push(`/scan/${session.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
@@ -59,76 +62,122 @@ export function Dashboard() {
     }
   };
 
+  const handleSignOut = async () => {
+    await auth.signOut();
+    router.push('/login');
+  };
+
   return (
-    <div className="max-w-md mx-auto">
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-200 dark:border-slate-700">
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">
-          Create Scan Session
-        </h1>
+    <div className="space-y-8">
+      {/* User header */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          Signed in as <span className="font-medium">{user.email}</span>
+          <span className="ml-2 px-2 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-xs uppercase tracking-wide">
+            {isAdmin ? 'Admin' : 'Scanner'}
+          </span>
+        </p>
+        <button
+          onClick={handleSignOut}
+          className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+        >
+          Sign out
+        </button>
+      </div>
 
-        <div className="space-y-4">
-          <div>
-            <label
-              htmlFor="sessionName"
-              className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
-            >
-              Session Name
-            </label>
-            <input
-              type="text"
-              id="sessionName"
-              value={sessionName}
-              onChange={(e) => setSessionName(e.target.value)}
-              placeholder="e.g., Warehouse Inventory 2024-06-15"
-              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
-            />
-          </div>
+      {/* Create session (admin only) */}
+      {isAdmin && (
+        <div className="max-w-md mx-auto">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 border border-slate-200 dark:border-slate-700">
+            <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-6">
+              Create Scan Session
+            </h2>
 
-          <div>
-            <label
-              htmlFor="csvFile"
-              className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
-            >
-              Upload CSV (barcode,name)
-            </label>
-            <input
-              type="file"
-              id="csvFile"
-              accept=".csv"
-              onChange={handleFileChange}
-              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-            />
-            {csvFile && (
-              <p className="mt-2 text-sm text-slate-500">
-                Selected: {csvFile.name}
-              </p>
-            )}
-          </div>
+            <div className="space-y-4">
+              <div>
+                <label
+                  htmlFor="sessionName"
+                  className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+                >
+                  Session Name
+                </label>
+                <input
+                  type="text"
+                  id="sessionName"
+                  value={sessionName}
+                  onChange={e => setSessionName(e.target.value)}
+                  placeholder="e.g., Warehouse Inventory 2024-06-15"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+                />
+              </div>
 
-          {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              <div>
+                <label
+                  htmlFor="csvFile"
+                  className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+                >
+                  Upload CSV (barcode,name)
+                </label>
+                <input
+                  type="file"
+                  id="csvFile"
+                  accept=".csv"
+                  onChange={handleFileChange}
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                {csvFile && (
+                  <p className="mt-2 text-sm text-slate-500">Selected: {csvFile.name}</p>
+                )}
+              </div>
+
+              {error && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                  <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                </div>
+              )}
+
+              <button
+                onClick={handleUpload}
+                disabled={isUploading || !sessionName.trim() || !csvFile}
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors"
+              >
+                {isUploading ? 'Creating Session...' : 'Create Session'}
+              </button>
             </div>
-          )}
 
-          <button
-            onClick={handleUpload}
-            disabled={isUploading || !sessionName.trim() || !csvFile}
-            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors"
-          >
-            {isUploading ? 'Creating Session...' : 'Create Session'}
-          </button>
+            <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+              <p className="text-xs text-slate-500 mb-2">CSV Format Example:</p>
+              <pre className="text-xs bg-slate-100 dark:bg-slate-900 p-3 rounded-lg overflow-x-auto">
+                <code>{`barcode,name\nABC001,Projector A\nABC002,Projector B`}</code>
+              </pre>
+            </div>
+          </div>
         </div>
+      )}
 
-        <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
-          <p className="text-xs text-slate-500 mb-2">CSV Format Example:</p>
-          <pre className="text-xs bg-slate-100 dark:bg-slate-900 p-3 rounded-lg overflow-x-auto">
-            <code>barcode,name{`\n`}
-ABC001,Projector A{`\n`}
-ABC002,Projector B{`\n`}
-ABC003,Projector C</code>
-          </pre>
-        </div>
+      {/* Session list */}
+      <div className="max-w-2xl mx-auto">
+        <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Sessions</h2>
+        {sessions.length === 0 ? (
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8 border border-slate-200 dark:border-slate-700 text-center text-slate-500">
+            {isAdmin ? 'No sessions yet. Create one above.' : 'No sessions available. Ask an administrator to create one.'}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {sessions.map(session => (
+              <button
+                key={session.id}
+                onClick={() => router.push(`/scan/${session.id}`)}
+                className="w-full text-left bg-white dark:bg-slate-800 rounded-xl shadow-lg p-4 border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
+              >
+                <p className="font-semibold text-slate-800 dark:text-slate-100">{session.name}</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Created {new Date(session.created_at).toLocaleString()}
+                </p>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

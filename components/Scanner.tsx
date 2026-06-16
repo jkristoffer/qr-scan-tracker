@@ -2,23 +2,24 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
+import { User } from '@supabase/supabase-js';
 import { db } from '@/lib/supabase';
 import { ScanResult } from '@/lib/types';
 
 interface ScannerProps {
   sessionId: string;
+  user: User;
   onScanComplete: (result: ScanResult) => void;
 }
 
-export function Scanner({ sessionId, onScanComplete }: ScannerProps) {
+export function Scanner({ sessionId, user, onScanComplete }: ScannerProps) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [scannedBy, setScannedBy] = useState('');
+  const [scannedBy, setScannedBy] = useState(user.email?.split('@')[0] ?? '');
 
   useEffect(() => {
     return () => {
-      // Cleanup scanner on unmount
       if (scannerRef.current) {
         scannerRef.current.stop().catch(console.error);
       }
@@ -40,33 +41,20 @@ export function Scanner({ sessionId, onScanComplete }: ScannerProps) {
 
       await scanner.start(
         { facingMode: 'environment' },
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-        },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
         async (decodedText) => {
-          // Stop scanning temporarily to prevent rapid duplicate scans
           await scanner.pause();
-
           try {
             const result = await processScan(decodedText, scannedBy);
             onScanComplete(result);
-
-            // Resume scanning after a brief delay
-            setTimeout(() => {
-              scanner.resume();
-            }, 1500);
+            setTimeout(() => scanner.resume(), 1500);
           } catch (err) {
-            setError(
-              err instanceof Error ? err.message : 'Scan processing failed'
-            );
-            setTimeout(() => {
-              scanner.resume();
-            }, 1500);
+            setError(err instanceof Error ? err.message : 'Scan processing failed');
+            setTimeout(() => scanner.resume(), 1500);
           }
         },
-        (errorMessage) => {
-          // Ignore scanning errors (they're normal between frames)
+        () => {
+          // Frame errors are normal between reads
         }
       );
     } catch (err) {
@@ -87,56 +75,35 @@ export function Scanner({ sessionId, onScanComplete }: ScannerProps) {
     setIsScanning(false);
   };
 
-  const processScan = async (
-    barcode: string,
-    user: string
-  ): Promise<ScanResult> => {
-    try {
-      // Find item by barcode
-      const item = await db.getItemByBarcode(sessionId, barcode);
+  const processScan = async (barcode: string, user: string): Promise<ScanResult> => {
+    const item = await db.getItemByBarcode(sessionId, barcode);
 
-      if (!item) {
-        return {
-          success: false,
-          message: `Barcode Not Found: ${barcode}`,
-          type: 'not_found',
-        };
-      }
-
-      if (item.scanned) {
-        return {
-          success: false,
-          item,
-          message: `Already Scanned by ${item.scanned_by} at ${new Date(
-            item.scanned_at || ''
-          ).toLocaleTimeString()}`,
-          type: 'duplicate',
-        };
-      }
-
-      // Attempt to scan (atomic update)
-      const scanned = await db.scanItem(item.id, user);
-
-      if (!scanned) {
-        // Race condition: someone else scanned it first
-        const freshItem = await db.getItemByBarcode(sessionId, barcode);
-        return {
-          success: false,
-          item: freshItem || undefined,
-          message: `Already Scanned (just now by someone else)`,
-          type: 'duplicate',
-        };
-      }
-
-      return {
-        success: true,
-        item: scanned,
-        message: `✓ Scanned: ${scanned.name}`,
-        type: 'success',
-      };
-    } catch (err) {
-      throw new Error('Scan processing failed');
+    if (!item) {
+      return { success: false, message: `Barcode Not Found: ${barcode}`, type: 'not_found' };
     }
+
+    if (item.scanned) {
+      return {
+        success: false,
+        item,
+        message: `Already Scanned by ${item.scanned_by} at ${new Date(item.scanned_at || '').toLocaleTimeString()}`,
+        type: 'duplicate',
+      };
+    }
+
+    const scanned = await db.scanItem(item.id, user);
+
+    if (!scanned) {
+      const freshItem = await db.getItemByBarcode(sessionId, barcode);
+      return {
+        success: false,
+        item: freshItem || undefined,
+        message: 'Already Scanned (just now by someone else)',
+        type: 'duplicate',
+      };
+    }
+
+    return { success: true, item: scanned, message: `✓ Scanned: ${scanned.name}`, type: 'success' };
   };
 
   return (
@@ -152,7 +119,7 @@ export function Scanner({ sessionId, onScanComplete }: ScannerProps) {
           type="text"
           id="scannerName"
           value={scannedBy}
-          onChange={(e) => setScannedBy(e.target.value)}
+          onChange={e => setScannedBy(e.target.value)}
           placeholder="Enter your name"
           disabled={isScanning}
           className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white disabled:opacity-50"
@@ -181,10 +148,7 @@ export function Scanner({ sessionId, onScanComplete }: ScannerProps) {
         </div>
       )}
 
-      <div
-        id="scanner"
-        className="mt-4 rounded-lg overflow-hidden bg-black aspect-square"
-      />
+      <div id="scanner" className="mt-4 rounded-lg overflow-hidden bg-black aspect-square" />
     </div>
   );
 }

@@ -1,65 +1,73 @@
 import { create } from 'zustand';
 import { Item, Progress } from '@/lib/types';
 
+function computeProgress(items: Item[]): Progress {
+  const total = items.length;
+  const scanned = items.filter(i => i.scanned).length;
+  return { total, scanned, remaining: total - scanned, percentage: total > 0 ? (scanned / total) * 100 : 0 };
+}
+
+function applyFilter(items: Item[], query: string): Item[] {
+  if (!query) return items;
+  const q = query.toLowerCase();
+  return items.filter(i =>
+    i.barcode.toLowerCase().includes(q) || i.name.toLowerCase().includes(q)
+  );
+}
+
+interface LastScan {
+  barcode: string;
+  result: 'success' | 'duplicate' | 'not_found';
+  message: string;
+  timestamp: number;
+}
+
 interface ScanStore {
   items: Item[];
+  filteredItems: Item[];
   setItems: (items: Item[]) => void;
   updateItem: (item: Item) => void;
   progress: Progress;
-  calculateProgress: () => void;
-  lastScan: {
-    barcode: string;
-    result: 'success' | 'duplicate' | 'not_found';
-    message: string;
-    timestamp: number;
-  } | null;
-  setLastScan: (
-    scan: { barcode: string; result: 'success' | 'duplicate' | 'not_found'; message: string; timestamp: number } | null
-  ) => void;
+  lastScan: LastScan | null;
+  setLastScan: (scan: LastScan | null) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
-  filteredItems: Item[];
 }
 
 export const useScanStore = create<ScanStore>((set, get) => ({
   items: [],
-  setItems: (items) => {
-    set({ items });
-    get().calculateProgress();
-  },
-  updateItem: (updatedItem) => {
-    set((state) => ({
-      items: state.items.map((item) =>
-        item.id === updatedItem.id ? updatedItem : item
-      ),
-    }));
-    get().calculateProgress();
-  },
+  filteredItems: [],
   progress: { total: 0, scanned: 0, remaining: 0, percentage: 0 },
-  calculateProgress: () => {
-    const state = get();
-    const total = state.items.length;
-    const scanned = state.items.filter((item) => item.scanned).length;
-    const remaining = total - scanned;
-    const percentage = total > 0 ? (scanned / total) * 100 : 0;
+  lastScan: null,
+  searchQuery: '',
 
+  setItems: (items) => {
     set({
-      progress: { total, scanned, remaining, percentage },
+      items,
+      filteredItems: applyFilter(items, get().searchQuery),
+      progress: computeProgress(items),
     });
   },
-  lastScan: null,
-  setLastScan: (scan) => set({ lastScan: scan }),
-  searchQuery: '',
-  setSearchQuery: (query) => set({ searchQuery: query }),
-  get filteredItems() {
-    const state = get();
-    if (!state.searchQuery) return state.items;
 
-    const query = state.searchQuery.toLowerCase();
-    return state.items.filter(
-      (item) =>
-        item.barcode.toLowerCase().includes(query) ||
-        item.name.toLowerCase().includes(query)
-    );
+  updateItem: (updatedItem) => {
+    set((state) => {
+      const items = state.items.map(item =>
+        item.id === updatedItem.id ? updatedItem : item
+      );
+      return {
+        items,
+        filteredItems: applyFilter(items, state.searchQuery),
+        progress: computeProgress(items),
+      };
+    });
+  },
+
+  setLastScan: (scan) => set({ lastScan: scan }),
+
+  setSearchQuery: (query) => {
+    set((state) => ({
+      searchQuery: query,
+      filteredItems: applyFilter(state.items, query),
+    }));
   },
 }));

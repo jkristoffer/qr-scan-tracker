@@ -1,22 +1,54 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
 
-function getSupabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+let _client: SupabaseClient | null = null;
 
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase environment variables');
+function getClient(): SupabaseClient {
+  if (!_client) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key) throw new Error('Missing Supabase environment variables');
+    _client = createClient(url, key);
   }
-
-  return createClient(supabaseUrl, supabaseKey);
+  return _client;
 }
 
-// Database functions
+export const auth = {
+  async signIn(email: string, password: string): Promise<User> {
+    const { data, error } = await getClient().auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data.user;
+  },
+
+  async signUp(email: string, password: string, role: 'admin' | 'scanner'): Promise<User | null> {
+    const { data, error } = await getClient().auth.signUp({
+      email,
+      password,
+      options: { data: { role } },
+    });
+    if (error) throw error;
+    return data.user;
+  },
+
+  async signOut(): Promise<void> {
+    const { error } = await getClient().auth.signOut();
+    if (error) throw error;
+  },
+
+  async getSession() {
+    const { data: { session } } = await getClient().auth.getSession();
+    return session;
+  },
+
+  onAuthStateChange(callback: (user: User | null) => void) {
+    return getClient().auth.onAuthStateChange((_, session) => {
+      callback(session?.user ?? null);
+    });
+  },
+};
+
 export const db = {
-  // Sessions
   async createSession(name: string) {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('scan_sessions')
       .insert({ name })
       .select()
@@ -26,8 +58,7 @@ export const db = {
   },
 
   async getSession(id: string) {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('scan_sessions')
       .select('*')
       .eq('id', id)
@@ -37,8 +68,7 @@ export const db = {
   },
 
   async listSessions() {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('scan_sessions')
       .select('*')
       .order('created_at', { ascending: false });
@@ -46,20 +76,24 @@ export const db = {
     return data;
   },
 
-  // Items
   async createItems(items: { barcode: string; name: string }[], sessionId: string) {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from('items')
-      .insert(items.map(item => ({ ...item, session_id: sessionId })))
-      .select();
-    if (error) throw error;
-    return data;
+    const client = getClient();
+    const BATCH_SIZE = 100;
+    const results = [];
+    for (let i = 0; i < items.length; i += BATCH_SIZE) {
+      const batch = items.slice(i, i + BATCH_SIZE);
+      const { data, error } = await client
+        .from('items')
+        .insert(batch.map(item => ({ ...item, session_id: sessionId })))
+        .select();
+      if (error) throw error;
+      results.push(...(data || []));
+    }
+    return results;
   },
 
   async getItems(sessionId: string) {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('items')
       .select('*')
       .eq('session_id', sessionId);
@@ -68,8 +102,7 @@ export const db = {
   },
 
   async getItemByBarcode(sessionId: string, barcode: string) {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('items')
       .select('*')
       .eq('session_id', sessionId)
@@ -79,10 +112,8 @@ export const db = {
     return data;
   },
 
-  // Atomic scan - prevents duplicates
   async scanItem(itemId: string, scannedBy: string) {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('items')
       .update({
         scanned: true,
@@ -90,43 +121,29 @@ export const db = {
         scanned_by: scannedBy,
       })
       .eq('id', itemId)
-      .eq('scanned', false) // Only update if not already scanned
+      .eq('scanned', false)
       .select()
       .maybeSingle();
-
     if (error) throw error;
-    return data; // Returns null if already scanned (duplicate)
+    return data;
   },
 
-  // Reset session
   async resetSession(sessionId: string) {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('items')
-      .update({
-        scanned: false,
-        scanned_at: null,
-        scanned_by: null,
-      })
+      .update({ scanned: false, scanned_at: null, scanned_by: null })
       .eq('session_id', sessionId)
       .select();
     if (error) throw error;
     return data;
   },
 
-  // Realtime subscription
   subscribeToItems(sessionId: string, callback: (payload: any) => void) {
-    const supabase = getSupabaseClient();
-    return supabase
+    return getClient()
       .channel(`items:${sessionId}`)
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'items',
-          filter: `session_id=eq.${sessionId}`,
-        },
+        { event: '*', schema: 'public', table: 'items', filter: `session_id=eq.${sessionId}` },
         callback
       )
       .subscribe();

@@ -17,18 +17,20 @@ export async function GET(
     // Get all items
     const items = await db.getItems(sessionId);
 
-    // Generate CSV
+    const csvField = (v: string) =>
+      v.includes(',') || v.includes('"') || v.includes('\n') ? `"${v.replace(/"/g, '""')}"` : v;
+
     const header = 'barcode,name,scanned,scanned_at,scanned_by\n';
     const rows = items
-      .map((item) => {
-        return [
-          item.barcode,
-          item.name,
+      .map((item) =>
+        [
+          csvField(item.barcode),
+          csvField(item.name),
           item.scanned ? 'true' : 'false',
-          item.scanned_at || '',
-          item.scanned_by || '',
-        ].join(',');
-      })
+          csvField(item.scanned_at || ''),
+          csvField(item.scanned_by || ''),
+        ].join(',')
+      )
       .join('\n');
 
     const csv = header + rows;
