@@ -86,7 +86,7 @@ export function Dashboard() {
             <div style={{ fontSize: 21, fontWeight: 700, letterSpacing: '0.34em' }}>GATE</div>
           </div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.22em', color: '#9a9a96', marginTop: 9 }}>
-            DOOR SCANNER · CHECK-IN
+            DOOR SCANNER · CHECK-IN · <span style={{ color: '#c2c2be' }}>v1</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.18em', color: '#b4b4b0', flexShrink: 0 }}>GATE</div>
