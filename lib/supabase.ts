@@ -57,7 +57,40 @@ export const db = {
     const { data, error } = await getClient()
       .from('scan_sessions')
       .select('*')
+      .eq('archived', false)
       .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+
+  async listArchivedSessions() {
+    const { data, error } = await getClient()
+      .from('scan_sessions')
+      .select('*')
+      .eq('archived', true)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+
+  async archiveSession(id: string) {
+    const { data, error } = await getClient()
+      .from('scan_sessions')
+      .update({ archived: true })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async unarchiveSession(id: string) {
+    const { data, error } = await getClient()
+      .from('scan_sessions')
+      .update({ archived: false })
+      .eq('id', id)
+      .select()
+      .single();
     if (error) throw error;
     return data;
   },

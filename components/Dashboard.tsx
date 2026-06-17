@@ -7,8 +7,12 @@ import { ScanSession } from '@/lib/types';
 
 interface EventProgress { total: number; scanned: number; }
 
+type Tab = 'active' | 'archived';
+
 export function Dashboard() {
+  const [tab, setTab] = useState<Tab>('active');
   const [sessions, setSessions] = useState<ScanSession[]>([]);
+  const [archivedSessions, setArchivedSessions] = useState<ScanSession[]>([]);
   const [progress, setProgress] = useState<Record<string, EventProgress>>({});
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState('');
@@ -36,6 +40,29 @@ export function Dashboard() {
       setProgress(prog);
     }).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (tab !== 'archived') return;
+    db.listArchivedSessions().then(async (list) => {
+      setArchivedSessions(list);
+      const prog = await db.getSessionsProgress(list.map(s => s.id));
+      setProgress(prev => ({ ...prev, ...prog }));
+    }).catch(console.error);
+  }, [tab]);
+
+  const handleArchive = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const updated = await db.archiveSession(id);
+    setSessions(prev => prev.filter(s => s.id !== id));
+    setArchivedSessions(prev => [updated, ...prev]);
+  };
+
+  const handleUnarchive = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const updated = await db.unarchiveSession(id);
+    setArchivedSessions(prev => prev.filter(s => s.id !== id));
+    setSessions(prev => [updated, ...prev]);
+  };
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -103,16 +130,39 @@ export function Dashboard() {
 
         {/* Event list */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px 120px' }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: '#9a9a96', padding: '0 6px 12px' }}>
-            YOUR EVENTS
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 6px 12px' }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: '#9a9a96' }}>
+              YOUR EVENTS
+            </div>
+            <div style={{ display: 'flex', gap: 4, background: '#f1f1ee', borderRadius: 999, padding: 3 }}>
+              {(['active', 'archived'] as Tab[]).map(t => (
+                <div
+                  key={t}
+                  onClick={() => setTab(t)}
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+                    padding: '5px 12px', borderRadius: 999, cursor: 'pointer',
+                    background: tab === t ? '#161618' : 'transparent',
+                    color: tab === t ? '#fff' : '#9a9a96',
+                  }}
+                >
+                  {t === 'active' ? 'ACTIVE' : 'ARCHIVED'}
+                </div>
+              ))}
+            </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {sessions.length === 0 && (
+            {tab === 'active' && sessions.length === 0 && (
               <div style={{ textAlign: 'center', padding: '48px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#b4b4b0', letterSpacing: '0.1em' }}>
                 NO EVENTS YET
               </div>
             )}
-            {sessions.map(s => {
+            {tab === 'archived' && archivedSessions.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '48px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#b4b4b0', letterSpacing: '0.1em' }}>
+                NO ARCHIVED EVENTS
+              </div>
+            )}
+            {(tab === 'active' ? sessions : archivedSessions).map(s => {
               const prog = progress[s.id] || { total: 0, scanned: 0 };
               const pct = prog.total > 0 ? Math.round((prog.scanned / prog.total) * 100) : 0;
               const live = isLive(s);
@@ -140,18 +190,35 @@ export function Dashboard() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                    <div
-                      onClick={e => { e.stopPropagation(); router.push(`/scan/${s.id}`); }}
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 38, background: '#161618', color: '#fff', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-                    >
-                      Scan
-                    </div>
+                    {tab === 'active' && (
+                      <div
+                        onClick={e => { e.stopPropagation(); router.push(`/scan/${s.id}`); }}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 38, background: '#161618', color: '#fff', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        Scan
+                      </div>
+                    )}
                     <div
                       onClick={e => { e.stopPropagation(); router.push(`/manage/${s.id}`); }}
                       style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 38, border: '1px solid #e2e2de', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#161618', cursor: 'pointer', gap: 6 }}
                     >
                       Manage
                     </div>
+                    {tab === 'active' ? (
+                      <div
+                        onClick={e => handleArchive(e, s.id)}
+                        style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 38, padding: '0 14px', border: '1px solid #e2e2de', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#9a9a96', cursor: 'pointer' }}
+                      >
+                        Archive
+                      </div>
+                    ) : (
+                      <div
+                        onClick={e => handleUnarchive(e, s.id)}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 38, border: '1px solid #e2e2de', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#161618', cursor: 'pointer' }}
+                      >
+                        Unarchive
+                      </div>
+                    )}
                   </div>
                 </div>
               );

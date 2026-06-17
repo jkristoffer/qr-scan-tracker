@@ -10,8 +10,12 @@ export async function migrate() {
       create table if not exists scan_sessions (
         id uuid primary key default gen_random_uuid(),
         name text not null,
-        created_at timestamptz default now()
+        created_at timestamptz default now(),
+        archived boolean default false
       )
+    `;
+    await sql`
+      alter table scan_sessions add column if not exists archived boolean default false
     `;
     await sql`
       create table if not exists items (

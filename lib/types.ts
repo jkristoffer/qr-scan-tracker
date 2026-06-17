@@ -2,6 +2,7 @@ export interface ScanSession {
   id: string;
   name: string;
   created_at: string;
+  archived: boolean;
 }
 
 export interface Item {
