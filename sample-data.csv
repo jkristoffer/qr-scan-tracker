@@ -1,11 +1,11 @@
-barcode,name
-ABC001,Projector A
-ABC002,Projector B
-ABC003,Projector C
-ABC004,Laptop Dell XPS
-ABC005,Laptop MacBook Pro
-ABC006,Monitor 27"
-ABC007,Monitor 24"
-ABC008,Webcam Logitech
-ABC009,Keyboard Wireless
-ABC010,Mouse Wireless
+barcode,name,email
+ABC001,Projector A,projector-a@example.com
+ABC002,Projector B,projector-b@example.com
+ABC003,Projector C,projector-c@example.com
+ABC004,Laptop Dell XPS,laptop-dell@example.com
+ABC005,Laptop MacBook Pro,laptop-mac@example.com
+ABC006,Monitor 27",monitor-27@example.com
+ABC007,Monitor 24",monitor-24@example.com
+ABC008,Webcam Logitech,webcam@example.com
+ABC009,Keyboard Wireless,keyboard@example.com
+ABC010,Mouse Wireless,mouse@example.com

@@ -48,12 +48,15 @@ export default function ManagePage() {
   const [tab, setTab] = useState<Tab>('active');
   const [tallyFilter, setTallyFilter] = useState<TallyFilter>('total');
   const [addName, setAddName] = useState('');
+  const [addEmail, setAddEmail] = useState('');
   const [adding, setAdding] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<GuestCard | null>(null);
   const [acting, setActing] = useState(false);
   const [pinnedId, setPinnedId] = useState<string | undefined>(undefined);
   const [expandedQr, setExpandedQr] = useState<Set<string>>(new Set());
   const [activeScanners, setActiveScanners] = useState<string[]>([]);
+  const [emailSending, setEmailSending] = useState<Set<string>>(new Set());
+  const [emailSummary, setEmailSummary] = useState<string | null>(null);
 
   const toggleQr = (id: string) =>
     setExpandedQr(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
@@ -93,13 +96,82 @@ export default function ManagePage() {
     setAdding(true);
     try {
       const barcode = nextTicketCode(cards.map(c => c.item));
-      const item = await db.addItem(sessionId, name, barcode);
+      const item = await db.addItem(sessionId, name, barcode, addEmail.trim() || null);
       const dataUrl = await toQrDataUrl(barcode);
       setCards(prev => [...prev, { item, dataUrl }]);
       setAddName('');
+      setAddEmail('');
       inputRef.current?.focus();
     } finally {
       setAdding(false);
+    }
+  };
+
+  const replaceUpdatedItems = (items: Item[]) => {
+    if (items.length === 0) return;
+    const byId = new Map(items.map(item => [item.id, item]));
+    setCards(prev => prev.map(card => byId.has(card.item.id) ? { ...card, item: byId.get(card.item.id)! } : card));
+  };
+
+  const sendQrEmails = async (itemIds: string[], force = false) => {
+    if (itemIds.length === 0) return { sent: 0, skipped: 0, failed: 0 };
+    setEmailSending(prev => new Set([...prev, ...itemIds]));
+    try {
+      const res = await fetch(`/api/qr-email/${sessionId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemIds, force }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Email send failed');
+      replaceUpdatedItems(data.updatedItems || []);
+      return {
+        sent: data.sent?.length || 0,
+        skipped: data.skipped?.length || 0,
+        failed: data.failed?.length || 0,
+      };
+    } finally {
+      setEmailSending(prev => {
+        const next = new Set(prev);
+        itemIds.forEach(id => next.delete(id));
+        return next;
+      });
+    }
+  };
+
+  const handleSendOne = async (card: GuestCard) => {
+    setEmailSummary(null);
+    try {
+      const result = await sendQrEmails([card.item.id], Boolean(card.item.qr_email_sent_at));
+      setEmailSummary(`Email: ${result.sent} sent, ${result.skipped} skipped, ${result.failed} failed`);
+    } catch (error) {
+      setEmailSummary(error instanceof Error ? error.message : 'Email send failed');
+    }
+  };
+
+  const handleSendUnsent = async () => {
+    const ids = activeCards
+      .filter(card => card.item.email && !card.item.qr_email_sent_at)
+      .map(card => card.item.id);
+    if (ids.length === 0) {
+      setEmailSummary('No unsent guests with email addresses.');
+      return;
+    }
+
+    setEmailSummary(`Sending ${ids.length} email${ids.length === 1 ? '' : 's'}...`);
+    let sent = 0;
+    let skipped = 0;
+    let failed = 0;
+    try {
+      for (let i = 0; i < ids.length; i += 20) {
+        const result = await sendQrEmails(ids.slice(i, i + 20), false);
+        sent += result.sent;
+        skipped += result.skipped;
+        failed += result.failed;
+      }
+      setEmailSummary(`Email: ${sent} sent, ${skipped} skipped, ${failed} failed`);
+    } catch (error) {
+      setEmailSummary(error instanceof Error ? error.message : 'Bulk email send failed');
     }
   };
 
@@ -226,11 +298,33 @@ export default function ManagePage() {
             </button>
           ))}
         </div>
+        {tab === 'active' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+            <button
+              onClick={handleSendUnsent}
+              disabled={emailSending.size > 0}
+              style={{
+                flexShrink: 0, padding: '8px 12px', borderRadius: 8, border: 'none',
+                background: emailSending.size > 0 ? '#d8d8d4' : '#161618',
+                color: emailSending.size > 0 ? '#8a8a86' : '#fff',
+                cursor: emailSending.size > 0 ? 'default' : 'pointer',
+                fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+              }}
+            >
+              Send unsent
+            </button>
+            {emailSummary && (
+              <div style={{ minWidth: 0, fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, color: '#7a7a76', letterSpacing: '0.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {emailSummary}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Add guest — active tab only */}
       {tab === 'active' && (
-        <div className="no-print" style={{ padding: '14px 16px', borderBottom: '1px solid #ececea', display: 'flex', gap: 10 }}>
+        <div className="no-print" style={{ padding: '14px 16px', borderBottom: '1px solid #ececea', display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
           <input
             ref={inputRef}
             value={addName}
@@ -241,13 +335,25 @@ export default function ManagePage() {
             onFocus={e => (e.target.style.borderColor = '#161618')}
             onBlur={e => (e.target.style.borderColor = '#dcdcd8')}
           />
-          <button
-            onClick={handleAdd}
-            disabled={!addName.trim() || adding}
-            style={{ flexShrink: 0, padding: '11px 20px', background: addName.trim() ? '#161618' : '#e2e2de', color: addName.trim() ? '#fff' : '#9a9a96', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: addName.trim() ? 'pointer' : 'default', fontFamily: 'inherit', transition: 'background 0.15s' }}
-          >
-            {adding ? '…' : 'Add'}
-          </button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <input
+              value={addEmail}
+              onChange={e => setAddEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAdd()}
+              placeholder="Email optional"
+              type="email"
+              style={{ flex: 1, minWidth: 0, border: '1px solid #dcdcd8', background: '#fff', borderRadius: 10, padding: '11px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }}
+              onFocus={e => (e.target.style.borderColor = '#161618')}
+              onBlur={e => (e.target.style.borderColor = '#dcdcd8')}
+            />
+            <button
+              onClick={handleAdd}
+              disabled={!addName.trim() || adding}
+              style={{ flexShrink: 0, padding: '11px 20px', background: addName.trim() ? '#161618' : '#e2e2de', color: addName.trim() ? '#fff' : '#9a9a96', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: addName.trim() ? 'pointer' : 'default', fontFamily: 'inherit', transition: 'background 0.15s' }}
+            >
+              {adding ? '...' : 'Add'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -262,6 +368,10 @@ export default function ManagePage() {
             const pinned = card.item.id === pinnedId;
             const checkinTime = card.item.scanned_at
               ? new Date(card.item.scanned_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+              : null;
+            const emailBusy = emailSending.has(card.item.id);
+            const emailSentTime = card.item.qr_email_sent_at
+              ? new Date(card.item.qr_email_sent_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
               : null;
             return (
               <div
@@ -284,6 +394,9 @@ export default function ManagePage() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.item.name}</div>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#9a9a96', marginTop: 3, letterSpacing: '0.04em' }}>{card.item.barcode}</div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: card.item.email ? '#6a6a66' : '#b4b4b0', marginTop: 3, letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {card.item.email || 'NO EMAIL'}
+                    </div>
                     {card.item.scanned && (
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 5, background: 'oklch(0.95 0.05 152)', borderRadius: 6, padding: '3px 8px' }}>
                         <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.12em', color: 'oklch(0.45 0.14 152)', fontWeight: 700 }}>
@@ -291,7 +404,29 @@ export default function ManagePage() {
                         </span>
                       </div>
                     )}
+                    {(emailSentTime || card.item.qr_email_last_error) && (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 5, background: card.item.qr_email_last_error ? 'oklch(0.96 0.06 32)' : '#f0f0ed', borderRadius: 6, padding: '3px 8px', maxWidth: '100%' }}>
+                        <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', color: card.item.qr_email_last_error ? 'oklch(0.48 0.16 32)' : '#6a6a66', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {card.item.qr_email_last_error ? `EMAIL ERROR: ${card.item.qr_email_last_error}` : `EMAIL SENT ${emailSentTime}`}
+                        </span>
+                      </div>
+                    )}
                   </div>
+                  <button
+                    onClick={() => handleSendOne(card)}
+                    disabled={!card.item.email || emailBusy}
+                    style={{
+                      flexShrink: 0, padding: '8px 10px', minWidth: 72, borderRadius: 8,
+                      border: '1px solid #e2e2de',
+                      background: !card.item.email ? '#f4f4f2' : card.item.qr_email_sent_at ? '#fff' : '#161618',
+                      color: !card.item.email ? '#b4b4b0' : card.item.qr_email_sent_at ? '#161618' : '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: !card.item.email || emailBusy ? 'default' : 'pointer',
+                      fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+                    }}
+                  >
+                    {emailBusy ? '...' : card.item.qr_email_sent_at ? 'Resend' : 'Send'}
+                  </button>
                   <button
                     onClick={() => setRemoveTarget(card)}
                     style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 8, border: '1px solid #e2e2de', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#b4b4b0', fontSize: 16 }}

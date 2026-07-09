@@ -95,7 +95,7 @@ export const db = {
     return data;
   },
 
-  async createItems(items: { barcode: string; name: string }[], sessionId: string) {
+  async createItems(items: { barcode: string; name: string; email?: string | null }[], sessionId: string) {
     const client = getClient();
     const BATCH_SIZE = 100;
     const results = [];
@@ -158,10 +158,44 @@ export const db = {
     return data;
   },
 
-  async addItem(sessionId: string, name: string, barcode: string) {
+  async addItem(sessionId: string, name: string, barcode: string, email?: string | null) {
     const { data, error } = await getClient()
       .from('items')
-      .insert({ session_id: sessionId, name, barcode, scanned: false })
+      .insert({ session_id: sessionId, name, barcode, email: email || null, scanned: false })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async getItemsByIds(sessionId: string, itemIds: string[]) {
+    if (itemIds.length === 0) return [];
+    const { data, error } = await getClient()
+      .from('items')
+      .select('*')
+      .eq('session_id', sessionId)
+      .in('id', itemIds);
+    if (error) throw error;
+    return data || [];
+  },
+
+  async updateQrEmailStatus(
+    itemId: string,
+    status: {
+      sentAt?: string | null;
+      resendId?: string | null;
+      lastError?: string | null;
+    }
+  ) {
+    const patch: Record<string, string | null> = {};
+    if ('sentAt' in status) patch.qr_email_sent_at = status.sentAt ?? null;
+    if ('resendId' in status) patch.qr_email_resend_id = status.resendId ?? null;
+    if ('lastError' in status) patch.qr_email_last_error = status.lastError ?? null;
+
+    const { data, error } = await getClient()
+      .from('items')
+      .update(patch)
+      .eq('id', itemId)
       .select()
       .single();
     if (error) throw error;

@@ -5,7 +5,7 @@
 QR Scan Tracker is a lightweight Next.js event check-in app for creating scan sessions, importing guest/item lists, generating QR codes, scanning tickets from mobile browsers, and sharing check-in state in real time through Supabase.
 
 ## TECH_STACK_INTENT
-- **Prefer:** Next.js App Router pages and route handlers, React 19 client components, TypeScript, Supabase client helpers, Postgres-backed Supabase tables, Zustand for scan UI state, `qrcode` for QR data URLs, and existing inline component styling.
+- **Prefer:** Next.js App Router pages and route handlers, React 19 client components, TypeScript, Supabase client helpers, Postgres-backed Supabase tables, Zustand for scan UI state, `qrcode` for QR data URLs/PNG buffers, Resend for QR email delivery, and existing inline component styling.
 - **Avoid:** Adding new UI frameworks, global state libraries, database clients, scanner libraries, or styling systems without explicit approval.
 - **Why:** The repo is intentionally compact: most runtime behavior is expressed in a small set of pages/components plus shared helpers in `lib/` and `store/`.
 
@@ -36,19 +36,21 @@ QR Scan Tracker is a lightweight Next.js event check-in app for creating scan se
 ## CONSTRAINTS
 - **Runtime:** Next.js 16 / React 19 app intended for Vercel deployment, backed by Supabase/Postgres. Local development uses `npm install` and `npm run dev`.
 - **Version locks:** `package-lock.json` is present; use npm and preserve the existing dependency set unless a dependency change is approved.
-- **External APIs:** Supabase project URL, Supabase anon key, and Postgres `DATABASE_URL` are required for full runtime behavior. Browser scanning requires camera access through `navigator.mediaDevices.getUserMedia`.
+- **External APIs:** Supabase project URL, Supabase anon key, and Postgres `DATABASE_URL` are required for full runtime behavior. Resend email delivery requires `RESEND_API_KEY` and `QR_EMAIL_FROM`; `QR_EMAIL_REPLY_TO` is optional. Browser scanning requires camera access through `navigator.mediaDevices.getUserMedia`.
 
 ## ARCH_INTENT
 - **Boundaries:**
   - `app/page.tsx` renders `components/Dashboard.tsx` for event/session creation, active/archive lists, gate-name storage, and CSV/TXT import. Current dashboard import behavior slices uploads to the first 500 non-empty lines.
   - `app/scan/[sessionId]/page.tsx` owns the scanner route orchestration: session/item load, realtime item subscription, presence join, progress/list panels, last-scan state updates, and scan result feedback.
-  - `app/manage/[sessionId]/page.tsx` owns management workflows: active/removed item views, add/remove/restore, QR card generation, scanner presence display, tally filters, and print actions.
+  - `app/manage/[sessionId]/page.tsx` owns management workflows: active/removed item views, add/remove/restore, QR card generation, scanner presence display, tally filters, print actions, and QR email send/resend controls.
   - `app/qr/[sessionId]/page.tsx` owns the dedicated printable QR grid for active session items.
   - `app/api/export/[sessionId]/route.ts` exports active items for a session as CSV.
+  - `app/api/qr-email/[sessionId]/route.ts` sends QR emails for up to 20 item IDs per request, skips removed/missing/already-sent items unless forced, and writes send status back to `items`.
   - `components/Scanner.tsx` owns browser camera capture and `jsQR` decoding, then delegates item lookup, scan mutation, and scan-attempt logging to `lib/supabase.ts`.
-  - `lib/supabase.ts` owns Supabase client creation and data operations for scan sessions, items, scan attempts, realtime item subscriptions, and presence helpers.
-  - `lib/migrate.ts` defines lightweight inline migrations for `scan_sessions`, `items`, `removed`, and `scan_attempts` when `DATABASE_URL` is configured.
-  - `supabase/migrations/*` contains SQL migration history for `scan_sessions`, `items`, `removed`, and `scan_attempts`.
+  - `lib/supabase.ts` owns Supabase client creation and data operations for scan sessions, items, QR email status, scan attempts, realtime item subscriptions, and presence helpers.
+  - `lib/qrEmail.ts` renders the repo-owned QR email template and sends inline CID QR PNG attachments through Resend.
+  - `lib/migrate.ts` defines lightweight inline migrations for `scan_sessions`, `items`, QR email fields, `removed`, and `scan_attempts` when `DATABASE_URL` is configured.
+  - `supabase/migrations/*` contains SQL migration history for `scan_sessions`, `items`, QR email fields, `removed`, and `scan_attempts`.
   - `store/useScanStore.ts` owns client-side item lists, filtered item lists, progress, search query, and last-scan state.
   - `lib/qr.ts` generates in-app QR data URLs; `scripts/generate-qr.mjs` generates standalone printable HTML from CSV input.
 - **Patterns:**
@@ -69,10 +71,11 @@ QR Scan Tracker is a lightweight Next.js event check-in app for creating scan se
 ## EXTENSIONS
 <!-- Project-specific additions; informational unless referenced -->
 - README deployment intent: create a Supabase project, deploy to Vercel with `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `DATABASE_URL`, then let the app create tables automatically on first load.
-- CSV import/export shape is `barcode,name` for imports and `barcode,name,scanned,scanned_at,scanned_by` for exports.
+- CSV import shape is `barcode,name,email`; legacy `barcode,name` and single-value rows are still accepted. CSV export shape is `barcode,name,email,scanned,scanned_at,scanned_by`.
 - Gate/scanner identity is currently lightweight client state stored in `localStorage` as `gate_name`.
 - Session archiving is represented by the `scan_sessions.archived` boolean.
 - Item removal is soft-delete style through `items.removed`; removed items remain available to management views.
+- QR email status is stored on `items.email`, `items.qr_email_sent_at`, `items.qr_email_resend_id`, and `items.qr_email_last_error`.
 
 ## UNANSWERED
 <!-- Ambiguities that would benefit from human clarification -->

@@ -10,10 +10,14 @@ export interface Item {
   session_id: string;
   barcode: string;
   name: string;
+  email: string | null;
   scanned: boolean;
   scanned_at: string | null;
   scanned_by: string | null;
   removed: boolean;
+  qr_email_sent_at: string | null;
+  qr_email_resend_id: string | null;
+  qr_email_last_error: string | null;
 }
 
 export interface ScanResult {

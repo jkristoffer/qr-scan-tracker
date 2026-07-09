@@ -13,12 +13,14 @@ Go to [supabase.com](https://supabase.com) → New project. Once it's ready, col
 | Project URL | Settings → API → Project URL |
 | Anon key | Settings → API → Project API keys → `anon public` |
 | Database URL | Settings → Database → Connection string → **URI** (use the **Session** mode pooler) |
+| Resend API key | Resend → API Keys |
+| QR email sender | A verified Resend sender, for example `Tickets <tickets@example.com>` |
 
 ### 2. Deploy to Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/jkristoffer/qr-scan-tracker&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,DATABASE_URL&envDescription=Find%20these%20in%20your%20Supabase%20project%20settings&envLink=https://supabase.com/dashboard/project/_/settings/api)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/jkristoffer/qr-scan-tracker&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,DATABASE_URL,RESEND_API_KEY,QR_EMAIL_FROM,QR_EMAIL_REPLY_TO&envDescription=Find%20Supabase%20values%20in%20your%20Supabase%20project%20settings%20and%20email%20values%20in%20Resend&envLink=https://supabase.com/dashboard/project/_/settings/api)
 
-Paste the three values when Vercel asks for them.
+Paste the Supabase and Resend values when Vercel asks for them. `QR_EMAIL_REPLY_TO` is optional.
 
 ### 3. Open the app
 
@@ -32,7 +34,7 @@ That's it. The app creates the database tables automatically on first load.
 git clone https://github.com/jkristoffer/qr-scan-tracker.git
 cd qr-scan-tracker
 npm install
-cp .env.local.example .env.local   # fill in the three values
+cp .env.local.example .env.local   # fill in Supabase and Resend values
 npm run dev
 ```
 
@@ -42,6 +44,6 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Usage
 
-- **New event** — tap `+ New event`, enter a name, and optionally upload a CSV guest list (`barcode,name` per line, or just names)
+- **New event** — tap `+ New event`, enter a name, and optionally upload a CSV guest list (`barcode,name,email` per line, old `barcode,name`, or just names)
 - **Scan** — opens the camera scanner; admitted / already-in / no-match results flood the screen
-- **Manage** — add/remove guests, view and print QR codes
+- **Manage** — add/remove guests, view and print QR codes, and send QR codes by email with Resend

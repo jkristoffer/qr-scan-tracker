@@ -2,7 +2,7 @@
 /**
  * Usage: node scripts/generate-qr.mjs [input.csv] [output.html]
  *
- * Reads a barcode,name CSV and writes a printable HTML sheet of QR codes.
+ * Reads a barcode,name,email CSV and writes a printable HTML sheet of QR codes.
  * Default input:  sample-guests.csv
  * Default output: qrcodes.html
  *
@@ -24,13 +24,17 @@ const outputFile = process.argv[3] || path.join(root, 'qrcodes.html');
 // Parse CSV
 const text  = fs.readFileSync(inputFile, 'utf-8');
 const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-const rows  = lines.slice(1).map(line => {
-  const [barcode, ...rest] = line.split(',');
-  return { barcode: barcode.trim(), name: rest.join(',').trim() };
+const dataLines = lines[0]?.toLowerCase().replace(/\s/g, '').startsWith('barcode,name')
+  ? lines.slice(1)
+  : lines;
+const rows  = dataLines.map(line => {
+  const [barcodeRaw, nameRaw] = line.split(',').map(part => part.trim());
+  const barcode = barcodeRaw || line;
+  return { barcode, name: nameRaw || barcode };
 }).filter(r => r.barcode);
 
 if (rows.length === 0) {
-  console.error('No rows found. Check your CSV format: barcode,name');
+  console.error('No rows found. Check your CSV format: barcode,name,email');
   process.exit(1);
 }
 

@@ -23,12 +23,20 @@ export async function migrate() {
         session_id uuid references scan_sessions(id) on delete cascade,
         barcode text not null,
         name text not null,
+        email text,
         scanned boolean default false,
         scanned_at timestamptz,
         scanned_by text,
-        removed boolean default false
+        removed boolean default false,
+        qr_email_sent_at timestamptz,
+        qr_email_resend_id text,
+        qr_email_last_error text
       )
     `;
+    await sql`alter table items add column if not exists email text`;
+    await sql`alter table items add column if not exists qr_email_sent_at timestamptz`;
+    await sql`alter table items add column if not exists qr_email_resend_id text`;
+    await sql`alter table items add column if not exists qr_email_last_error text`;
     await sql`
       create table if not exists scan_attempts (
         id uuid primary key default gen_random_uuid(),

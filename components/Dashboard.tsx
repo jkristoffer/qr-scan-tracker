@@ -9,6 +9,23 @@ interface EventProgress { total: number; scanned: number; }
 
 type Tab = 'active' | 'archived';
 
+function parseGuestRows(text: string) {
+  const lines = text.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+  const dataLines = lines[0]?.toLowerCase().replace(/\s/g, '').startsWith('barcode,name')
+    ? lines.slice(1)
+    : lines;
+
+  return dataLines.slice(0, 500).map(ln => {
+    const [barcodeRaw, nameRaw, emailRaw] = ln.split(',').map(s => s.trim());
+    const barcode = barcodeRaw || ln;
+    return {
+      barcode,
+      name: nameRaw || barcode,
+      email: emailRaw || null,
+    };
+  }).filter(item => item.barcode);
+}
+
 export function Dashboard() {
   const [tab, setTab] = useState<Tab>('active');
   const [sessions, setSessions] = useState<ScanSession[]>([]);
@@ -16,7 +33,7 @@ export function Dashboard() {
   const [progress, setProgress] = useState<Record<string, EventProgress>>({});
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState('');
-  const [uploadLabel, setUploadLabel] = useState<{ title: string; sub: string }>({ title: 'Upload guest list', sub: 'CSV or TXT, one name per line' });
+  const [uploadLabel, setUploadLabel] = useState<{ title: string; sub: string }>({ title: 'Upload guest list', sub: 'CSV barcode,name,email or TXT names' });
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [creating, setCreating] = useState(false);
   const [gateName, setGateName] = useState('');
@@ -69,7 +86,7 @@ export function Dashboard() {
     if (!f) return;
     setCsvFile(f);
     f.text().then(t => {
-      const count = t.split(/\r?\n/).map(x => x.trim()).filter(Boolean).length;
+      const count = parseGuestRows(t).length;
       setUploadLabel({ title: `${count} guests loaded`, sub: 'Tap to replace · CSV or TXT' });
       if (!newName) setNewName(f.name.replace(/\.[^.]+$/, ''));
     });
@@ -82,11 +99,7 @@ export function Dashboard() {
       const session = await db.createSession(name);
       if (csvFile) {
         const text = await csvFile.text();
-        const lines = text.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
-        const items = lines.slice(0, 500).map(ln => {
-          const [barcode, itemName] = ln.split(',').map(s => s.trim());
-          return { barcode: barcode || ln, name: itemName || barcode || ln };
-        });
+        const items = parseGuestRows(text);
         await db.createItems(items, session.id);
       }
       router.push(`/scan/${session.id}`);
