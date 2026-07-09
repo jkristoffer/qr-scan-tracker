@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "qr": "node scripts/generate-qr.mjs"
+    "qr": "node scripts/generate-qr.mjs",
+    "test:qr-email-live": "node scripts/test-qr-email-live.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",

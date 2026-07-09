@@ -40,6 +40,18 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+### Live QR email test
+
+The live QR email harness creates temporary Supabase rows, sends through Resend, verifies `qr_email_resend_id` was persisted, and deletes its test session when it finishes. It is not part of `npm test` because it sends real email.
+
+```bash
+npm run test:qr-email-live
+QR_EMAIL_TEST_TO=you@example.com npm run test:qr-email-live
+npm run test:qr-email-live -- --keep
+```
+
+By default, test email is sent to Resend's `delivered@resend.dev` sink. Set `QR_EMAIL_TEST_BASE_URL` to point at an already-running Next server; otherwise the script starts a temporary local server.
+
 ---
 
 ## Usage
