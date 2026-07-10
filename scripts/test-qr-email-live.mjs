@@ -47,14 +47,18 @@ function loadEnvLocal() {
   }
 }
 
-function isPlaceholder(value) {
-  return !value || value.startsWith('your_');
+function isPlaceholder(key, value) {
+  if (!value || value.startsWith('your_')) return true;
+  return key === 'QR_EMAIL_FROM' && /(?:example\.com|your-verified-domain\.com)/i.test(value);
 }
 
 function requireEnv() {
-  const missing = REQUIRED_ENV.filter((key) => isPlaceholder(process.env[key]));
-  if (missing.length > 0) {
-    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  const invalid = REQUIRED_ENV.filter((key) => isPlaceholder(key, process.env[key]));
+  if (invalid.length > 0) {
+    const senderHint = invalid.includes('QR_EMAIL_FROM')
+      ? '\nQR_EMAIL_FROM must use a sender domain verified in Resend.'
+      : '';
+    throw new Error(`Missing or placeholder environment variables: ${invalid.join(', ')}${senderHint}`);
   }
 }
 
@@ -237,8 +241,8 @@ async function main() {
     sessionId = session.id;
 
     const rows = [
-      { session_id: sessionId, barcode: `LIVE-${suffix}-VALID`, name: 'Live Email Valid', email: recipient },
-      { session_id: sessionId, barcode: `LIVE-${suffix}-NOEMAIL`, name: 'Live Email Missing', email: null },
+      { session_id: sessionId, barcode: `LIVE-${suffix}-VALID`, name: 'Live Email Valid', email: recipient, removed: false },
+      { session_id: sessionId, barcode: `LIVE-${suffix}-NOEMAIL`, name: 'Live Email Missing', email: null, removed: false },
       { session_id: sessionId, barcode: `LIVE-${suffix}-REMOVED`, name: 'Live Email Removed', email: recipient, removed: true },
     ];
     const { data: items, error: itemsError } = await supabase
@@ -258,7 +262,10 @@ async function main() {
     const first = await postQrEmail(server.baseUrl, sessionId, {
       itemIds: [valid.id, missingEmail.id, removed.id, randomUuid()],
     });
-    assert(first.sent.length === 1 && statusFor(first.sent, valid.id), 'Expected valid item to be sent');
+    assert(
+      first.sent.length === 1 && statusFor(first.sent, valid.id),
+      `Expected valid item to be sent: ${JSON.stringify(first)}`
+    );
     assert(statusFor(first.skipped, missingEmail.id)?.reason === 'missing_email', 'Expected missing email skip');
     assert(statusFor(first.skipped, removed.id)?.reason === 'removed', 'Expected removed skip');
     assert(first.skipped.some((status) => status.reason === 'not_found'), 'Expected not_found skip');
@@ -277,7 +284,10 @@ async function main() {
     console.log('No-force request skipped as already_sent');
 
     const forced = await postQrEmail(server.baseUrl, sessionId, { itemIds: [valid.id], force: true });
-    assert(forced.sent.length === 1 && statusFor(forced.sent, valid.id), 'Expected forced resend to send');
+    assert(
+      forced.sent.length === 1 && statusFor(forced.sent, valid.id),
+      `Expected forced resend to send: ${JSON.stringify(forced)}`
+    );
     assert(forced.failed.length === 0, `Expected no forced resend failures: ${JSON.stringify(forced.failed)}`);
 
     const resent = await fetchItem(supabase, valid.id);

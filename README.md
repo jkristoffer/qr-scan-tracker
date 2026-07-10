@@ -51,6 +51,7 @@ npm run test:qr-email-live -- --keep
 ```
 
 By default, test email is sent to Resend's `delivered@resend.dev` sink. Set `QR_EMAIL_TEST_BASE_URL` to point at an already-running Next server; otherwise the script starts a temporary local server.
+`QR_EMAIL_FROM` must contain a sender address on a domain verified in Resend; placeholder domains such as `example.com` are rejected before test data is created.
 
 ---
 
