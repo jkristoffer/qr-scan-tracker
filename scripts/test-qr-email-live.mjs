@@ -15,6 +15,13 @@ const REQUIRED_ENV = [
 ];
 const DEFAULT_TO = 'delivered@resend.dev';
 const KEEP = process.argv.includes('--keep');
+const PUBLIC_EMAIL_DOMAINS = new Set([
+  'gmail.com',
+  'hotmail.com',
+  'icloud.com',
+  'outlook.com',
+  'yahoo.com',
+]);
 
 function parseDotenvValue(value) {
   const trimmed = value.trim();
@@ -49,14 +56,25 @@ function loadEnvLocal() {
 
 function isPlaceholder(key, value) {
   if (!value || value.startsWith('your_')) return true;
-  return key === 'QR_EMAIL_FROM' && /(?:example\.com|your-verified-domain\.com)/i.test(value);
+  if (key !== 'QR_EMAIL_FROM') return false;
+
+  const domain = value.match(/@([^>\s]+)>?\s*$/)?.[1]?.toLowerCase();
+  return (
+    !domain ||
+    domain === 'example.com' ||
+    domain === 'your-verified-domain.com' ||
+    PUBLIC_EMAIL_DOMAINS.has(domain)
+  );
 }
 
 function requireEnv() {
   const invalid = REQUIRED_ENV.filter((key) => isPlaceholder(key, process.env[key]));
   if (invalid.length > 0) {
     const senderHint = invalid.includes('QR_EMAIL_FROM')
-      ? '\nQR_EMAIL_FROM must use a sender domain verified in Resend.'
+      ? [
+          '\nQR_EMAIL_FROM must use a sender domain verified in Resend; public mailbox domains such as gmail.com cannot be used.',
+          'For a Resend-only test, use QR Scan Tracker <onboarding@resend.dev> with QR_EMAIL_TEST_TO=delivered@resend.dev.',
+        ].join('\n')
       : '';
     throw new Error(`Missing or placeholder environment variables: ${invalid.join(', ')}${senderHint}`);
   }
