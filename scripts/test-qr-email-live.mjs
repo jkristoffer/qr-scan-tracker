@@ -62,12 +62,44 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function formatError(error) {
+  const messages = [];
+  let current = error;
+
+  while (current && messages.length < 5) {
+    const code = current.code ? ` [${current.code}]` : '';
+    const message = current.message || String(current);
+    messages.push(`${message}${code}`);
+    current = current.cause;
+  }
+
+  const details = messages.filter((message, index) => message !== messages[index - 1]);
+  if (details.some((message) => message.includes('[ENOTFOUND]'))) {
+    details.push(
+      'Check NEXT_PUBLIC_SUPABASE_URL in .env.local; its hostname could not be resolved.'
+    );
+  }
+
+  return details.join('\nCaused by: ');
+}
+
 function randomSuffix() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function randomUuid() {
   return randomUUID();
+}
+
+async function verifySupabaseReachable() {
+  try {
+    await fetch(process.env.NEXT_PUBLIC_SUPABASE_URL, {
+      method: 'HEAD',
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (error) {
+    throw new Error('Unable to reach the configured Supabase project.', { cause: error });
+  }
 }
 
 async function getFreePort() {
@@ -192,6 +224,7 @@ async function main() {
   let sessionId = null;
   let server = null;
   try {
+    await verifySupabaseReachable();
     server = await startNextServer();
 
     const suffix = randomSuffix();
@@ -283,6 +316,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error.message);
+  console.error(formatError(error));
   process.exitCode = 1;
 });
