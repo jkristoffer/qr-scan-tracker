@@ -48,7 +48,7 @@ QR Scan Tracker is a lightweight Next.js event check-in app for creating scan se
   - `app/api/qr-email/[sessionId]/route.ts` sends QR emails for up to 20 item IDs per request, skips removed/missing/already-sent items unless forced, and writes send status back to `items`.
   - `components/Scanner.tsx` owns browser camera capture and `jsQR` decoding, then delegates item lookup, scan mutation, and scan-attempt logging to `lib/supabase.ts`.
   - `lib/supabase.ts` owns Supabase client creation and data operations for scan sessions, items, QR email status, scan attempts, realtime item subscriptions, and presence helpers.
-  - `lib/qrEmail.ts` renders the repo-owned QR email template and sends inline CID QR PNG attachments through Resend.
+  - `emails/QrTicketEmail.tsx` owns the React Email entry-pass template; `lib/qrEmail.ts` assembles its subject/text content and sends inline CID QR PNG attachments through Resend.
   - `lib/migrate.ts` defines lightweight inline migrations for `scan_sessions`, `items`, QR email fields, `removed`, and `scan_attempts` when `DATABASE_URL` is configured.
   - `supabase/migrations/*` contains SQL migration history for `scan_sessions`, `items`, QR email fields, `removed`, and `scan_attempts`.
   - `store/useScanStore.ts` owns client-side item lists, filtered item lists, progress, search query, and last-scan state.

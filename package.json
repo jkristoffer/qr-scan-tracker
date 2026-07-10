@@ -21,6 +21,7 @@
     "postgres": "^3.4.9",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-email": "^6.6.9",
     "resend": "^6.17.2",
     "typescript": "^6.0.3",
     "zustand": "^5.0.14"
