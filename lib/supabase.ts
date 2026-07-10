@@ -69,6 +69,17 @@ export const db = {
     return data;
   },
 
+  async renameSession(id: string, name: string) {
+    const { data, error } = await getClient()
+      .from('scan_sessions')
+      .update({ name })
+      .eq('id', id)
+      .select(MANAGE_SESSION_COLUMNS)
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
   async getSessionsProgress(sessionIds: string[]): Promise<Record<string, { total: number; scanned: number }>> {
     if (sessionIds.length === 0) return {};
     const [{ data: activeData, error: e1 }, { data: scannedData, error: e2 }] = await Promise.all([

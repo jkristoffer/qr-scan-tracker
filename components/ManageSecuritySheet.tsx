@@ -13,6 +13,9 @@ interface ManageSecuritySheetProps {
 }
 
 export function ManageSecuritySheet({ session, onClose, onLock, onSessionChange }: ManageSecuritySheetProps) {
+  const [nameDraft, setNameDraft] = useState(session.name);
+  const [renaming, setRenaming] = useState(false);
+  const [renameMessage, setRenameMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [currentPin, setCurrentPin] = useState('');
   const [nextPin, setNextPin] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -20,6 +23,23 @@ export function ManageSecuritySheet({ session, onClose, onLock, onSessionChange 
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const nextPinValid = isValidManagePin(nextPin);
   const pinsMatch = nextPin === confirmation;
+
+  const handleRename = async () => {
+    const name = nameDraft.trim();
+    if (!name || name === session.name || renaming) return;
+    setRenaming(true);
+    setRenameMessage(null);
+    try {
+      const updated = await db.renameSession(session.id, name);
+      onSessionChange(updated);
+      setNameDraft(updated.name);
+      setRenameMessage({ type: 'success', text: 'Event name updated.' });
+    } catch {
+      setRenameMessage({ type: 'error', text: 'Could not rename the event. Please try again.' });
+    } finally {
+      setRenaming(false);
+    }
+  };
 
   const handleChangePin = async () => {
     if (!isValidManagePin(currentPin) || !nextPinValid || !pinsMatch || saving || !session.manage_password_hash) return;
@@ -59,15 +79,38 @@ export function ManageSecuritySheet({ session, onClose, onLock, onSessionChange 
       <section
         role="dialog"
         aria-modal="true"
-        aria-label="Manage security settings"
+        aria-label="Event settings"
         onClick={event => event.stopPropagation()}
         style={{ width: '100%', maxWidth: 480, background: '#fbfbfa', borderRadius: '22px 22px 0 0', padding: '24px 20px 30px', animation: 'sheetUp 0.28s cubic-bezier(0.16,1,0.3,1)', maxHeight: '90vh', overflowY: 'auto' }}
       >
         <div style={{ width: 38, height: 4, background: '#dcdcd8', borderRadius: 999, margin: '0 auto 20px' }} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h2 style={{ fontSize: 20, margin: 0 }}>Manage security</h2>
+          <h2 style={{ fontSize: 20, margin: 0 }}>Event settings</h2>
           <button type="button" onClick={onClose} aria-label="Close settings" style={{ width: 32, height: 32, border: '1px solid #e2e2de', borderRadius: 9, background: '#fff', fontSize: 18, cursor: 'pointer' }}>×</button>
         </div>
+
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '22px 0 8px' }}>EVENT NAME</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            value={nameDraft}
+            onChange={event => { setNameDraft(event.target.value); setRenameMessage(null); }}
+            onKeyDown={event => event.key === 'Enter' && handleRename()}
+            placeholder="Event name"
+            aria-label="Event name"
+            aria-invalid={!nameDraft.trim()}
+            style={{ flex: 1, minWidth: 0, border: `1px solid ${nameDraft.trim() ? '#dcdcd8' : '#d92d20'}`, background: '#fff', borderRadius: 10, padding: '12px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }}
+          />
+          <button
+            type="button"
+            onClick={handleRename}
+            disabled={!nameDraft.trim() || nameDraft.trim() === session.name || renaming}
+            style={{ flexShrink: 0, border: 'none', borderRadius: 10, padding: '0 17px', background: !nameDraft.trim() || nameDraft.trim() === session.name || renaming ? '#d8d8d4' : '#161618', color: !nameDraft.trim() || nameDraft.trim() === session.name || renaming ? '#8a8a86' : '#fff', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', cursor: !nameDraft.trim() || nameDraft.trim() === session.name || renaming ? 'default' : 'pointer' }}
+          >
+            {renaming ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+        {!nameDraft.trim() && <div style={{ color: '#b42318', fontSize: 12, marginTop: 7 }}>Event name is required.</div>}
+        {renameMessage && <div role="status" style={{ color: renameMessage.type === 'error' ? '#b42318' : 'oklch(0.45 0.14 152)', fontSize: 12.5, marginTop: 9 }}>{renameMessage.text}</div>}
 
         <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '22px 0 8px' }}>CHANGE MANAGE PIN</div>
         {[
