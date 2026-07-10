@@ -3,13 +3,29 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { db } from '@/lib/supabase';
+import { allocateTicketCodes } from '@/lib/ticketCodes';
 import { ScanSession } from '@/lib/types';
 
 interface EventProgress { total: number; scanned: number; }
 
 type Tab = 'active' | 'archived';
 
-function parseGuestRows(text: string) {
+interface GuestInput {
+  id: number;
+  name: string;
+  email: string;
+}
+
+interface GuestItem {
+  barcode: string;
+  name: string;
+  email: string | null;
+}
+
+const EMPTY_UPLOAD_LABEL = { title: 'Upload guest list', sub: 'CSV barcode,name,email or TXT names' };
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function parseGuestRows(text: string): GuestItem[] {
   const lines = text.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
   const dataLines = lines[0]?.toLowerCase().replace(/\s/g, '').startsWith('barcode,name')
     ? lines.slice(1)
@@ -33,12 +49,31 @@ export function Dashboard() {
   const [progress, setProgress] = useState<Record<string, EventProgress>>({});
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState('');
-  const [uploadLabel, setUploadLabel] = useState<{ title: string; sub: string }>({ title: 'Upload guest list', sub: 'CSV barcode,name,email or TXT names' });
+  const [uploadLabel, setUploadLabel] = useState<{ title: string; sub: string }>(EMPTY_UPLOAD_LABEL);
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [uploadedGuests, setUploadedGuests] = useState<GuestItem[]>([]);
+  const [manualGuests, setManualGuests] = useState<GuestInput[]>([{ id: 1, name: '', email: '' }]);
+  const [creationError, setCreationError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [gateName, setGateName] = useState('');
   const router = useRouter();
   const sheetRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const nextManualGuestId = useRef(2);
+  const uploadRequestId = useRef(0);
+
+  const populatedManualGuests = manualGuests.filter(guest => guest.name.trim() || guest.email.trim());
+  const manualGuestErrors = new Map<number, { name?: string; email?: string }>();
+  for (const guest of populatedManualGuests) {
+    const errors: { name?: string; email?: string } = {};
+    if (!guest.name.trim()) errors.name = 'Name is required.';
+    if (guest.email.trim() && !EMAIL_PATTERN.test(guest.email.trim())) errors.email = 'Enter a valid email.';
+    if (errors.name || errors.email) manualGuestErrors.set(guest.id, errors);
+  }
+  const combinedGuestCount = uploadedGuests.length + populatedManualGuests.length;
+  const exceedsGuestLimit = combinedGuestCount > 500;
+  const hasGuestErrors = manualGuestErrors.size > 0;
+  const creationBlocked = creating || hasGuestErrors || exceedsGuestLimit;
 
   useEffect(() => {
     const stored = localStorage.getItem('gate_name');
@@ -81,30 +116,63 @@ export function Dashboard() {
     setSessions(prev => [updated, ...prev]);
   };
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
+    const requestId = ++uploadRequestId.current;
+    const guests = parseGuestRows(await f.text());
+    if (requestId !== uploadRequestId.current) return;
     setCsvFile(f);
-    f.text().then(t => {
-      const count = parseGuestRows(t).length;
-      setUploadLabel({ title: `${count} guests loaded`, sub: 'Tap to replace · CSV or TXT' });
-      if (!newName) setNewName(f.name.replace(/\.[^.]+$/, ''));
-    });
+    setUploadedGuests(guests);
+    setUploadLabel({ title: `${guests.length} guests loaded`, sub: 'Tap to replace · CSV or TXT' });
+    setCreationError(null);
+    if (!newName) setNewName(f.name.replace(/\.[^.]+$/, ''));
+  };
+
+  const clearUpload = () => {
+    uploadRequestId.current++;
+    setCsvFile(null);
+    setUploadedGuests([]);
+    setUploadLabel(EMPTY_UPLOAD_LABEL);
+    setCreationError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const addManualGuest = () => {
+    setManualGuests(prev => [...prev, { id: nextManualGuestId.current++, name: '', email: '' }]);
+  };
+
+  const updateManualGuest = (id: number, field: 'name' | 'email', value: string) => {
+    setManualGuests(prev => prev.map(guest => guest.id === id ? { ...guest, [field]: value } : guest));
+    setCreationError(null);
+  };
+
+  const removeManualGuest = (id: number) => {
+    setManualGuests(prev => prev.length === 1
+      ? [{ ...prev[0], name: '', email: '' }]
+      : prev.filter(guest => guest.id !== id));
+    setCreationError(null);
   };
 
   const handleCreate = async () => {
+    if (creationBlocked) return;
     const name = newName.trim() || 'Untitled Event';
+    const manualBarcodes = allocateTicketCodes(uploadedGuests.map(guest => guest.barcode), populatedManualGuests.length);
+    const manualItems = populatedManualGuests.map((guest, index) => ({
+      barcode: manualBarcodes[index],
+      name: guest.name.trim(),
+      email: guest.email.trim() || null,
+    }));
+
     setCreating(true);
+    setCreationError(null);
     try {
       const session = await db.createSession(name);
-      if (csvFile) {
-        const text = await csvFile.text();
-        const items = parseGuestRows(text);
-        await db.createItems(items, session.id);
-      }
+      if (uploadedGuests.length > 0) await db.createItems(uploadedGuests, session.id);
+      if (manualItems.length > 0) await db.createItems(manualItems, session.id);
       router.push(`/scan/${session.id}`);
-    } catch (err) {
-      console.error(err);
+    } catch {
+      setCreationError('Could not create the event. Please try again.');
     } finally {
       setCreating(false);
     }
@@ -256,8 +324,9 @@ export function Dashboard() {
             style={{ position: 'absolute', inset: 0, zIndex: 40, background: 'rgba(20,20,22,0.42)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
           >
             <div
+              ref={sheetRef}
               onClick={e => e.stopPropagation()}
-              style={{ background: '#fbfbfa', borderRadius: '22px 22px 0 0', padding: '22px 20px 26px', animation: 'sheetUp 0.34s cubic-bezier(0.16,1,0.3,1)' }}
+              style={{ background: '#fbfbfa', borderRadius: '22px 22px 0 0', padding: '22px 20px 26px', animation: 'sheetUp 0.34s cubic-bezier(0.16,1,0.3,1)', maxHeight: '92vh', overflowY: 'auto', overscrollBehavior: 'contain' }}
             >
               <div style={{ width: 38, height: 4, background: '#dcdcd8', borderRadius: 999, margin: '0 auto 18px' }} />
               <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.01em' }}>New event</div>
@@ -279,15 +348,83 @@ export function Dashboard() {
                   <div style={{ fontSize: 14.5, fontWeight: 600 }}>{uploadLabel.title}</div>
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#9a9a96', marginTop: 3 }}>{uploadLabel.sub}</div>
                 </div>
-                <input type="file" accept=".csv,.txt" onChange={handleFile} style={{ display: 'none' }} />
+                <input ref={fileInputRef} type="file" accept=".csv,.txt" onChange={handleFile} style={{ display: 'none' }} />
               </label>
 
-              <div
-                onClick={creating ? undefined : handleCreate}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: creating ? '#9a9a96' : '#161618', color: '#fff', borderRadius: 14, height: 56, cursor: creating ? 'default' : 'pointer', fontSize: 16, fontWeight: 600, marginTop: 20 }}
+              {csvFile && (
+                <button
+                  type="button"
+                  onClick={clearUpload}
+                  style={{ border: 'none', background: 'transparent', color: '#777773', padding: '8px 2px 0', cursor: 'pointer', fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.08em' }}
+                >
+                  CLEAR UPLOAD
+                </button>
+              )}
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '18px 0 8px' }}>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.14em', color: '#9a9a96' }}>MANUAL GUESTS</div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: exceedsGuestLimit ? '#b42318' : '#9a9a96' }}>{combinedGuestCount}/500 TOTAL</div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 250, overflowY: 'auto', paddingRight: 2 }}>
+                {manualGuests.map((guest, index) => {
+                  const errors = manualGuestErrors.get(guest.id);
+                  return (
+                    <div key={guest.id} style={{ border: '1px solid #e2e2de', background: '#fff', borderRadius: 12, padding: 11 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#9a9a96', letterSpacing: '0.08em' }}>GUEST {index + 1}</div>
+                        <button
+                          type="button"
+                          onClick={() => removeManualGuest(guest.id)}
+                          aria-label={`Remove guest ${index + 1}`}
+                          style={{ width: 26, height: 26, border: '1px solid #e2e2de', borderRadius: 8, background: '#fff', color: '#777773', cursor: 'pointer', fontSize: 17, lineHeight: 1 }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <input
+                        value={guest.name}
+                        onChange={e => updateManualGuest(guest.id, 'name', e.target.value)}
+                        placeholder="Guest name"
+                        aria-label={`Guest ${index + 1} name`}
+                        aria-invalid={Boolean(errors?.name)}
+                        style={{ width: '100%', border: `1px solid ${errors?.name ? '#d92d20' : '#dcdcd8'}`, background: '#fff', borderRadius: 9, padding: '11px 12px', fontSize: 14.5, fontFamily: 'inherit', outline: 'none' }}
+                      />
+                      {errors?.name && <div style={{ color: '#b42318', fontSize: 11.5, marginTop: 5 }}>{errors.name}</div>}
+                      <input
+                        type="email"
+                        value={guest.email}
+                        onChange={e => updateManualGuest(guest.id, 'email', e.target.value)}
+                        placeholder="Email (optional)"
+                        aria-label={`Guest ${index + 1} email`}
+                        aria-invalid={Boolean(errors?.email)}
+                        style={{ width: '100%', border: `1px solid ${errors?.email ? '#d92d20' : '#dcdcd8'}`, background: '#fff', borderRadius: 9, padding: '11px 12px', fontSize: 14.5, fontFamily: 'inherit', outline: 'none', marginTop: 8 }}
+                      />
+                      {errors?.email && <div style={{ color: '#b42318', fontSize: 11.5, marginTop: 5 }}>{errors.email}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                onClick={addManualGuest}
+                style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', color: '#161618', borderRadius: 10, padding: '11px 14px', cursor: 'pointer', fontSize: 13.5, fontWeight: 600, marginTop: 10 }}
+              >
+                + Add another guest
+              </button>
+
+              {exceedsGuestLimit && <div style={{ color: '#b42318', fontSize: 12.5, marginTop: 10 }}>Remove guests or clear the upload to stay within the 500 guest limit.</div>}
+              {creationError && <div role="alert" style={{ color: '#b42318', fontSize: 12.5, marginTop: 10 }}>{creationError}</div>}
+
+              <button
+                type="button"
+                disabled={creationBlocked}
+                onClick={handleCreate}
+                style={{ width: '100%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', background: creationBlocked ? '#9a9a96' : '#161618', color: '#fff', borderRadius: 14, height: 56, cursor: creationBlocked ? 'default' : 'pointer', fontSize: 16, fontWeight: 600, marginTop: 20, fontFamily: 'inherit' }}
               >
                 {creating ? 'Creating…' : 'Create & open scanner'}
-              </div>
+              </button>
             </div>
           </div>
         )}

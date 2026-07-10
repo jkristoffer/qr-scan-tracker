@@ -57,6 +57,7 @@ By default, test email is sent to Resend's `delivered@resend.dev` sink. Set `QR_
 
 ## Usage
 
-- **New event** — tap `+ New event`, enter a name, and optionally upload a CSV guest list (`barcode,name,email` per line, old `barcode,name`, or just names)
+- **New event** — tap `+ New event`, enter a name, then optionally upload a CSV/TXT guest list, add guests manually, or combine both (maximum 500 guests). Uploaded barcodes are preserved; manual guests receive sequential `TKT-####` barcodes. Events with no guests are also supported.
+- **Guest list files** — CSV rows accept `barcode,name,email`, legacy `barcode,name`, or a single value; use **Clear upload** in the New event sheet to remove a selected file without discarding manual drafts
 - **Scan** — opens the camera scanner; admitted / already-in / no-match results flood the screen
 - **Manage** — add/remove guests, view and print QR codes, and send QR codes by email with Resend

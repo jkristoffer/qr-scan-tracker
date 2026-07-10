@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { db } from '@/lib/supabase';
 import { toQrDataUrl } from '@/lib/qr';
+import { nextTicketCode } from '@/lib/ticketCodes';
 import { Item, ScanSession } from '@/lib/types';
 
 interface GuestCard {
@@ -13,16 +14,6 @@ interface GuestCard {
 
 type Tab = 'active' | 'removed';
 type TallyFilter = 'total' | 'checked_in' | 'pending';
-
-function nextTicketCode(items: Item[]): string {
-  let max = 0;
-  for (const item of items) {
-    const m = item.barcode.match(/^TKT-(\d+)$/);
-    if (m) max = Math.max(max, parseInt(m[1], 10));
-  }
-  return `TKT-${String(max + 1).padStart(4, '0')}`;
-}
-
 
 function sortedActive(cards: GuestCard[], pinnedId?: string): GuestCard[] {
   return [...cards].sort((a, b) => {
@@ -95,7 +86,7 @@ export default function ManagePage() {
     if (!name || adding) return;
     setAdding(true);
     try {
-      const barcode = nextTicketCode(cards.map(c => c.item));
+      const barcode = nextTicketCode(cards.map(c => c.item.barcode));
       const item = await db.addItem(sessionId, name, barcode, addEmail.trim() || null);
       const dataUrl = await toQrDataUrl(barcode);
       setCards(prev => [...prev, { item, dataUrl }]);

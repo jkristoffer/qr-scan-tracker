@@ -40,7 +40,7 @@ QR Scan Tracker is a lightweight Next.js event check-in app for creating scan se
 
 ## ARCH_INTENT
 - **Boundaries:**
-  - `app/page.tsx` renders `components/Dashboard.tsx` for event/session creation, active/archive lists, gate-name storage, and CSV/TXT import. Current dashboard import behavior slices uploads to the first 500 non-empty lines.
+  - `app/page.tsx` renders `components/Dashboard.tsx` for event/session creation, active/archive lists, gate-name storage, CSV/TXT import, and repeatable manual guest entry. Creation accepts up to 500 combined guests, preserves uploaded barcodes, and assigns manual guests sequential `TKT-####` barcodes after the highest imported ticket code. Upload parsing still slices files to the first 500 non-empty lines.
   - `app/scan/[sessionId]/page.tsx` owns the scanner route orchestration: session/item load, realtime item subscription, presence join, progress/list panels, last-scan state updates, and scan result feedback.
   - `app/manage/[sessionId]/page.tsx` owns management workflows: active/removed item views, add/remove/restore, QR card generation, scanner presence display, tally filters, print actions, and QR email send/resend controls.
   - `app/qr/[sessionId]/page.tsx` owns the dedicated printable QR grid for active session items.
@@ -53,6 +53,7 @@ QR Scan Tracker is a lightweight Next.js event check-in app for creating scan se
   - `supabase/migrations/*` contains SQL migration history for `scan_sessions`, `items`, QR email fields, `removed`, and `scan_attempts`.
   - `store/useScanStore.ts` owns client-side item lists, filtered item lists, progress, search query, and last-scan state.
   - `lib/qr.ts` generates in-app QR data URLs; `scripts/generate-qr.mjs` generates standalone printable HTML from CSV input.
+  - `lib/ticketCodes.ts` owns sequential `TKT-####` allocation shared by event creation and the Manage screen.
 - **Patterns:**
   - Prefer extending existing `db` helper methods over scattering Supabase calls through pages.
   - Prefer updating the narrow route/component that owns a workflow instead of introducing cross-cutting abstractions.
@@ -72,6 +73,7 @@ QR Scan Tracker is a lightweight Next.js event check-in app for creating scan se
 <!-- Project-specific additions; informational unless referenced -->
 - README deployment intent: create a Supabase project, deploy to Vercel with `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `DATABASE_URL`, then let the app create tables automatically on first load.
 - CSV import shape is `barcode,name,email`; legacy `barcode,name` and single-value rows are still accepted. CSV export shape is `barcode,name,email,scanned,scanned_at,scanned_by`.
+- New events may combine uploaded and manual guests up to 500 total, or be created empty. A completely blank manual row is ignored; populated manual rows require a name and accept an optional valid email.
 - Gate/scanner identity is currently lightweight client state stored in `localStorage` as `gate_name`.
 - Session archiving is represented by the `scan_sessions.archived` boolean.
 - Item removal is soft-delete style through `items.removed`; removed items remain available to management views.
