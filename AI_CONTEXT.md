@@ -29,6 +29,7 @@ QR Scan Tracker is a lightweight Next.js event check-in app for creating scan se
   - `/qr/[sessionId]` is a printable QR code grid for a session.
 - Keep Supabase table access centralized through `lib/supabase.ts` unless a change has a clear reason to create a new boundary.
 - Preserve real-time item updates through Supabase realtime subscriptions for the `items` table.
+- Treat the per-event Manage PIN as a lightweight client-side gate, not a server-enforced authorization boundary; do not claim that it secures direct Supabase access.
 - Preserve duplicate-scan protection: scanning updates only unscanned items and treats already-scanned or racing updates as duplicates.
 - Do not read, log, or echo local secret values such as Supabase keys or `DATABASE_URL`.
 - Leave generated/sample data files alone unless the task explicitly covers them.
@@ -40,9 +41,9 @@ QR Scan Tracker is a lightweight Next.js event check-in app for creating scan se
 
 ## ARCH_INTENT
 - **Boundaries:**
-  - `app/page.tsx` renders `components/Dashboard.tsx` for event/session creation, active/archive lists, gate-name storage, CSV/TXT import, and repeatable manual guest entry. Creation accepts up to 500 combined guests, preserves uploaded barcodes, and assigns manual guests sequential `TKT-####` barcodes after the highest imported ticket code. Upload parsing still slices files to the first 500 non-empty lines.
+  - `app/page.tsx` renders `components/Dashboard.tsx` for event/session creation, active/archive lists, gate-name storage, CSV/TXT import, repeatable manual guest entry, and required 4-digit Manage PIN setup. Creation accepts up to 500 combined guests, preserves uploaded barcodes, and assigns manual guests sequential `TKT-####` barcodes after the highest imported ticket code. Upload parsing still slices files to the first 500 non-empty lines.
   - `app/scan/[sessionId]/page.tsx` owns the scanner route orchestration: session/item load, realtime item subscription, presence join, progress/list panels, last-scan state updates, and scan result feedback.
-  - `app/manage/[sessionId]/page.tsx` owns management workflows: active/removed item views, add/remove/restore, QR card generation, scanner presence display, tally filters, print actions, and QR email send/resend controls.
+  - `app/manage/[sessionId]/page.tsx` owns the session-scoped Manage PIN gate and management workflows: active/removed item views, add/remove/restore, QR card generation, scanner presence display, tally filters, print actions, QR email send/resend controls, PIN changes, and explicit locking. Guest and presence data load only after the client-side gate unlocks.
   - `app/qr/[sessionId]/page.tsx` owns the dedicated printable QR grid for active session items.
   - `app/api/export/[sessionId]/route.ts` exports active items for a session as CSV.
   - `app/api/qr-email/[sessionId]/route.ts` sends QR emails for up to 20 item IDs per request, skips removed/missing/already-sent items unless forced, and writes send status back to `items`.
@@ -54,6 +55,7 @@ QR Scan Tracker is a lightweight Next.js event check-in app for creating scan se
   - `store/useScanStore.ts` owns client-side item lists, filtered item lists, progress, search query, and last-scan state.
   - `lib/qr.ts` generates in-app QR data URLs; `scripts/generate-qr.mjs` generates standalone printable HTML from CSV input.
   - `lib/ticketCodes.ts` owns sequential `TKT-####` allocation shared by event creation and the Manage screen.
+  - `lib/managePassword.ts` owns 4-digit PIN validation plus versioned PBKDF2 hashing and verification through Web Crypto; only encoded verifiers are persisted.
 - **Patterns:**
   - Prefer extending existing `db` helper methods over scattering Supabase calls through pages.
   - Prefer updating the narrow route/component that owns a workflow instead of introducing cross-cutting abstractions.
@@ -74,6 +76,7 @@ QR Scan Tracker is a lightweight Next.js event check-in app for creating scan se
 - README deployment intent: create a Supabase project, deploy to Vercel with `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `DATABASE_URL`, then let the app create tables automatically on first load.
 - CSV import shape is `barcode,name,email`; legacy `barcode,name` and single-value rows are still accepted. CSV export shape is `barcode,name,email,scanned,scanned_at,scanned_by`.
 - New events may combine uploaded and manual guests up to 500 total, or be created empty. A completely blank manual row is ignored; populated manual rows require a name and accept an optional valid email.
+- New events require a 4-digit Manage PIN. Legacy sessions keep a null `manage_password_hash` until the first Manage visitor atomically claims them by setting a PIN. Successful access is remembered per event in `sessionStorage` until the tab closes or the user locks Manage.
 - Gate/scanner identity is currently lightweight client state stored in `localStorage` as `gate_name`.
 - Session archiving is represented by the `scan_sessions.archived` boolean.
 - Item removal is soft-delete style through `items.removed`; removed items remain available to management views.

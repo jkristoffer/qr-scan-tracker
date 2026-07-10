@@ -1,6 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 let _client: SupabaseClient | null = null;
+const SESSION_COLUMNS = 'id,name,created_at,archived';
+const MANAGE_SESSION_COLUMNS = `${SESSION_COLUMNS},manage_password_hash`;
 
 function getClient(): SupabaseClient {
   if (!_client) {
@@ -13,11 +15,11 @@ function getClient(): SupabaseClient {
 }
 
 export const db = {
-  async createSession(name: string) {
+  async createSession(name: string, managePasswordHash: string) {
     const { data, error } = await getClient()
       .from('scan_sessions')
-      .insert({ name })
-      .select()
+      .insert({ name, manage_password_hash: managePasswordHash })
+      .select(SESSION_COLUMNS)
       .single();
     if (error) throw error;
     return data;
@@ -26,9 +28,43 @@ export const db = {
   async getSession(id: string) {
     const { data, error } = await getClient()
       .from('scan_sessions')
-      .select('*')
+      .select(SESSION_COLUMNS)
       .eq('id', id)
       .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async getManageSession(id: string) {
+    const { data, error } = await getClient()
+      .from('scan_sessions')
+      .select(MANAGE_SESSION_COLUMNS)
+      .eq('id', id)
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async claimManagePassword(id: string, managePasswordHash: string) {
+    const { data, error } = await getClient()
+      .from('scan_sessions')
+      .update({ manage_password_hash: managePasswordHash })
+      .eq('id', id)
+      .is('manage_password_hash', null)
+      .select(MANAGE_SESSION_COLUMNS)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
+  async changeManagePassword(id: string, currentHash: string, nextHash: string) {
+    const { data, error } = await getClient()
+      .from('scan_sessions')
+      .update({ manage_password_hash: nextHash })
+      .eq('id', id)
+      .eq('manage_password_hash', currentHash)
+      .select(MANAGE_SESSION_COLUMNS)
+      .maybeSingle();
     if (error) throw error;
     return data;
   },
@@ -56,7 +92,7 @@ export const db = {
   async listSessions() {
     const { data, error } = await getClient()
       .from('scan_sessions')
-      .select('*')
+      .select(SESSION_COLUMNS)
       .eq('archived', false)
       .order('created_at', { ascending: false });
     if (error) throw error;
@@ -66,7 +102,7 @@ export const db = {
   async listArchivedSessions() {
     const { data, error } = await getClient()
       .from('scan_sessions')
-      .select('*')
+      .select(SESSION_COLUMNS)
       .eq('archived', true)
       .order('created_at', { ascending: false });
     if (error) throw error;
@@ -78,7 +114,7 @@ export const db = {
       .from('scan_sessions')
       .update({ archived: true })
       .eq('id', id)
-      .select()
+      .select(SESSION_COLUMNS)
       .single();
     if (error) throw error;
     return data;
@@ -89,7 +125,7 @@ export const db = {
       .from('scan_sessions')
       .update({ archived: false })
       .eq('id', id)
-      .select()
+      .select(SESSION_COLUMNS)
       .single();
     if (error) throw error;
     return data;

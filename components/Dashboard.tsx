@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { db } from '@/lib/supabase';
+import { hashManagePin, isValidManagePin } from '@/lib/managePassword';
 import { allocateTicketCodes } from '@/lib/ticketCodes';
 import { ScanSession } from '@/lib/types';
 
@@ -49,6 +50,8 @@ export function Dashboard() {
   const [progress, setProgress] = useState<Record<string, EventProgress>>({});
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState('');
+  const [newManagePin, setNewManagePin] = useState('');
+  const [confirmManagePin, setConfirmManagePin] = useState('');
   const [uploadLabel, setUploadLabel] = useState<{ title: string; sub: string }>(EMPTY_UPLOAD_LABEL);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [uploadedGuests, setUploadedGuests] = useState<GuestItem[]>([]);
@@ -73,7 +76,9 @@ export function Dashboard() {
   const combinedGuestCount = uploadedGuests.length + populatedManualGuests.length;
   const exceedsGuestLimit = combinedGuestCount > 500;
   const hasGuestErrors = manualGuestErrors.size > 0;
-  const creationBlocked = creating || hasGuestErrors || exceedsGuestLimit;
+  const managePinValid = isValidManagePin(newManagePin);
+  const managePinsMatch = newManagePin === confirmManagePin;
+  const creationBlocked = creating || hasGuestErrors || exceedsGuestLimit || !managePinValid || !managePinsMatch;
 
   useEffect(() => {
     const stored = localStorage.getItem('gate_name');
@@ -167,7 +172,8 @@ export function Dashboard() {
     setCreating(true);
     setCreationError(null);
     try {
-      const session = await db.createSession(name);
+      const managePasswordHash = await hashManagePin(newManagePin);
+      const session = await db.createSession(name, managePasswordHash);
       if (uploadedGuests.length > 0) await db.createItems(uploadedGuests, session.id);
       if (manualItems.length > 0) await db.createItems(manualItems, session.id);
       router.push(`/scan/${session.id}`);
@@ -340,6 +346,37 @@ export function Dashboard() {
                 onFocus={e => (e.target.style.borderColor = '#161618')}
                 onBlur={e => (e.target.style.borderColor = '#dcdcd8')}
               />
+
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>MANAGE PIN</div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="new-password"
+                  maxLength={4}
+                  value={newManagePin}
+                  onChange={e => { setNewManagePin(e.target.value); setCreationError(null); }}
+                  placeholder="4-digit PIN"
+                  aria-label="Manage PIN"
+                  aria-invalid={Boolean(newManagePin) && !managePinValid}
+                  style={{ flex: 1, minWidth: 0, border: `1px solid ${newManagePin && !managePinValid ? '#d92d20' : '#dcdcd8'}`, background: '#fff', borderRadius: 12, padding: '15px 14px', fontSize: 16, fontFamily: 'inherit', outline: 'none' }}
+                />
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="new-password"
+                  maxLength={4}
+                  value={confirmManagePin}
+                  onChange={e => { setConfirmManagePin(e.target.value); setCreationError(null); }}
+                  placeholder="Confirm PIN"
+                  aria-label="Confirm Manage PIN"
+                  aria-invalid={Boolean(confirmManagePin) && !managePinsMatch}
+                  style={{ flex: 1, minWidth: 0, border: `1px solid ${confirmManagePin && !managePinsMatch ? '#d92d20' : '#dcdcd8'}`, background: '#fff', borderRadius: 12, padding: '15px 14px', fontSize: 16, fontFamily: 'inherit', outline: 'none' }}
+                />
+              </div>
+              <div style={{ fontSize: 11.5, color: confirmManagePin && !managePinsMatch ? '#b42318' : '#9a9a96', marginTop: 6 }}>
+                {confirmManagePin && !managePinsMatch ? 'PINs do not match.' : 'Required to open this event’s Manage page.'}
+              </div>
 
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>GUEST LIST</div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 13, border: '1px dashed #c8c8c4', background: '#fff', borderRadius: 12, padding: '15px 14px', cursor: 'pointer' }}>

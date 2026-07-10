@@ -57,7 +57,9 @@ By default, test email is sent to Resend's `delivered@resend.dev` sink. Set `QR_
 
 ## Usage
 
-- **New event** — tap `+ New event`, enter a name, then optionally upload a CSV/TXT guest list, add guests manually, or combine both (maximum 500 guests). Uploaded barcodes are preserved; manual guests receive sequential `TKT-####` barcodes. Events with no guests are also supported.
+- **New event** — tap `+ New event`, enter a name and a 4-digit Manage PIN, then optionally upload a CSV/TXT guest list, add guests manually, or combine both (maximum 500 guests). Uploaded barcodes are preserved; manual guests receive sequential `TKT-####` barcodes. Events with no guests are also supported.
 - **Guest list files** — CSV rows accept `barcode,name,email`, legacy `barcode,name`, or a single value; use **Clear upload** in the New event sheet to remove a selected file without discarding manual drafts
 - **Scan** — opens the camera scanner; admitted / already-in / no-match results flood the screen
-- **Manage** — add/remove guests, view and print QR codes, and send QR codes by email with Resend
+- **Manage** — enter the event’s PIN to add/remove guests, view and print QR codes, send QR codes by email with Resend, or change the PIN. Access remains unlocked in the current browser tab until it closes or you choose **Lock Manage page**. The first visitor to Manage for an older event without a PIN will be asked to set one.
+
+The Manage PIN is a lightweight client-side gate for casual access, not strong authorization. The app’s existing public Supabase data model remains unchanged, so do not treat the PIN as protection against a determined user with direct API access.

@@ -5,6 +5,10 @@ export interface ScanSession {
   archived: boolean;
 }
 
+export interface ManageSession extends ScanSession {
+  manage_password_hash: string | null;
+}
+
 export interface Item {
   id: string;
   session_id: string;

@@ -2,10 +2,13 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { ManageAccessGate } from '@/components/ManageAccessGate';
+import { ManageSecuritySheet } from '@/components/ManageSecuritySheet';
+import { manageAccessStorageKey } from '@/lib/managePassword';
 import { db } from '@/lib/supabase';
 import { toQrDataUrl } from '@/lib/qr';
 import { nextTicketCode } from '@/lib/ticketCodes';
-import { Item, ScanSession } from '@/lib/types';
+import { Item, ManageSession } from '@/lib/types';
 
 interface GuestCard {
   item: Item;
@@ -14,6 +17,7 @@ interface GuestCard {
 
 type Tab = 'active' | 'removed';
 type TallyFilter = 'total' | 'checked_in' | 'pending';
+type AccessState = 'checking' | 'locked' | 'unlocked';
 
 function sortedActive(cards: GuestCard[], pinnedId?: string): GuestCard[] {
   return [...cards].sort((a, b) => {
@@ -33,9 +37,11 @@ export default function ManagePage() {
   const sessionId = params.sessionId as string;
   const router = useRouter();
 
-  const [session, setSession] = useState<ScanSession | null>(null);
+  const [session, setSession] = useState<ManageSession | null>(null);
   const [cards, setCards] = useState<GuestCard[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [accessState, setAccessState] = useState<AccessState>('checking');
+  const [loadingData, setLoadingData] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('active');
   const [tallyFilter, setTallyFilter] = useState<TallyFilter>('total');
   const [addName, setAddName] = useState('');
@@ -55,25 +61,48 @@ export default function ManagePage() {
   const pinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (accessState !== 'unlocked') return;
     const channel = db.watchPresence(sessionId, setActiveScanners);
     return () => { channel.unsubscribe(); };
-  }, [sessionId]);
+  }, [accessState, sessionId]);
 
   useEffect(() => {
-    const load = async () => {
+    let cancelled = false;
+    const checkAccess = async () => {
       try {
-        const [sess, items] = await Promise.all([db.getSession(sessionId), db.getAllItems(sessionId)]);
-        setSession(sess);
-        const generated = await Promise.all(items.map(async item => ({ item, dataUrl: await toQrDataUrl(item.barcode) })));
-        setCards(generated);
+        const manageSession = await db.getManageSession(sessionId);
+        if (cancelled) return;
+        setSession(manageSession);
+        const storedAccess = sessionStorage.getItem(manageAccessStorageKey(sessionId));
+        const unlocked = Boolean(manageSession.manage_password_hash && storedAccess === manageSession.manage_password_hash);
+        if (unlocked) setLoadingData(true);
+        setAccessState(unlocked ? 'unlocked' : 'locked');
       } catch {
         router.push('/');
-      } finally {
-        setLoading(false);
       }
     };
-    load();
+    checkAccess();
+    return () => { cancelled = true; };
   }, [sessionId, router]);
+
+  useEffect(() => {
+    if (accessState !== 'unlocked') return;
+    let cancelled = false;
+    const loadItems = async () => {
+      setLoadingData(true);
+      try {
+        const items = await db.getAllItems(sessionId);
+        const generated = await Promise.all(items.map(async item => ({ item, dataUrl: await toQrDataUrl(item.barcode) })));
+        if (!cancelled) setCards(generated);
+      } catch {
+        if (!cancelled) router.push('/');
+      } finally {
+        if (!cancelled) setLoadingData(false);
+      }
+    };
+    loadItems();
+    return () => { cancelled = true; };
+  }, [accessState, sessionId, router]);
 
   const pinTemporarily = useCallback((id: string) => {
     setPinnedId(id);
@@ -189,11 +218,36 @@ export default function ManagePage() {
     }
   };
 
-  if (loading) {
+  const handleLock = () => {
+    sessionStorage.removeItem(manageAccessStorageKey(sessionId));
+    setSettingsOpen(false);
+    setCards([]);
+    setActiveScanners([]);
+    setAccessState('locked');
+  };
+
+  const handleUnlock = () => {
+    setLoadingData(true);
+    setAccessState('unlocked');
+  };
+
+  if (accessState === 'checking' || (accessState === 'unlocked' && loadingData)) {
     return (
       <div style={{ minHeight: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: '#5a5a5e' }}>LOADING…</div>
       </div>
+    );
+  }
+
+  if (!session) return null;
+
+  if (accessState === 'locked') {
+    return (
+      <ManageAccessGate
+        session={session}
+        onSessionChange={setSession}
+        onUnlock={handleUnlock}
+      />
     );
   }
 
@@ -241,6 +295,9 @@ export default function ManagePage() {
               )}
             </div>
           </div>
+          <button onClick={() => setSettingsOpen(true)} aria-label="Event settings" style={{ flexShrink: 0, width: 38, height: 38, border: '1px solid #e2e2de', background: '#fff', color: '#161618', borderRadius: 10, fontSize: 18, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+            ⋯
+          </button>
           <button onClick={() => window.print()} style={{ flexShrink: 0, padding: '9px 16px', background: '#161618', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
             Print
           </button>
@@ -498,6 +555,14 @@ export default function ManagePage() {
             </div>
           </div>
         </div>
+      )}
+      {settingsOpen && (
+        <ManageSecuritySheet
+          session={session}
+          onClose={() => setSettingsOpen(false)}
+          onLock={handleLock}
+          onSessionChange={setSession}
+        />
       )}
     </div>
   );
