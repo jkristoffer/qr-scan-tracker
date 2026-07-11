@@ -51,9 +51,12 @@ export const useScanStore = create<ScanStore>((set, get) => ({
 
   updateItem: (updatedItem) => {
     set((state) => {
-      const items = state.items.map(item =>
-        item.id === updatedItem.id ? updatedItem : item
-      );
+      const existingIndex = state.items.findIndex(item => item.id === updatedItem.id);
+      const items = updatedItem.removed
+        ? state.items.filter(item => item.id !== updatedItem.id)
+        : existingIndex >= 0
+          ? state.items.map(item => item.id === updatedItem.id ? updatedItem : item)
+          : [...state.items, updatedItem];
       return {
         items,
         filteredItems: applyFilter(items, state.searchQuery),

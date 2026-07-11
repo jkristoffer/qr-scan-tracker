@@ -37,3 +37,12 @@ export interface Progress {
   remaining: number;
   percentage: number;
 }
+
+export type CheckInEventType = 'check_in' | 'duplicate' | 'undo_check_in';
+export type CheckInSource = 'camera' | 'manual' | 'manage';
+export type UndoCheckInStatus = 'undone' | 'stale' | 'not_found';
+
+export interface UndoCheckInResult {
+  status: UndoCheckInStatus;
+  item: Item | null;
+}

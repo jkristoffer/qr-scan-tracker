@@ -28,8 +28,12 @@ function sortedActive(cards: GuestCard[], pinnedId?: string): GuestCard[] {
   });
 }
 
-function sortedRemoved(cards: GuestCard[]): GuestCard[] {
-  return [...cards].sort((a, b) => a.item.name.localeCompare(b.item.name));
+function sortedRemoved(cards: GuestCard[], pinnedId?: string): GuestCard[] {
+  return [...cards].sort((a, b) => {
+    if (a.item.id === pinnedId) return -1;
+    if (b.item.id === pinnedId) return 1;
+    return a.item.name.localeCompare(b.item.name);
+  });
 }
 
 export default function ManagePage() {
@@ -48,6 +52,9 @@ export default function ManagePage() {
   const [addEmail, setAddEmail] = useState('');
   const [adding, setAdding] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<GuestCard | null>(null);
+  const [actionTarget, setActionTarget] = useState<GuestCard | null>(null);
+  const [undoTarget, setUndoTarget] = useState<GuestCard | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
   const [pinnedId, setPinnedId] = useState<string | undefined>(undefined);
   const [expandedQr, setExpandedQr] = useState<Set<string>>(new Set());
@@ -63,6 +70,35 @@ export default function ManagePage() {
   useEffect(() => {
     if (accessState !== 'unlocked') return;
     const channel = db.watchPresence(sessionId, setActiveScanners);
+    return () => { channel.unsubscribe(); };
+  }, [accessState, sessionId]);
+
+  useEffect(() => {
+    if (accessState !== 'unlocked') return;
+    const channel = db.subscribeToItems(sessionId, payload => {
+      if (payload.eventType !== 'UPDATE') return;
+      const item = payload.new as Item;
+      setCards(prev => {
+        const existing = prev.find(card => card.item.id === item.id);
+        if (!existing) {
+          void toQrDataUrl(item.barcode).then(dataUrl => {
+            setCards(current => current.some(card => card.item.id === item.id) ? current : [...current, { item, dataUrl }]);
+          });
+          return prev;
+        }
+        if (existing.item.barcode !== item.barcode) {
+          const expectedBarcode = item.barcode;
+          void toQrDataUrl(expectedBarcode).then(dataUrl => {
+            setCards(current => current.map(card =>
+              card.item.id === item.id && card.item.barcode === expectedBarcode
+                ? { ...card, dataUrl }
+              : card
+            ));
+          }).catch(() => undefined);
+        }
+        return prev.map(card => card.item.id === item.id ? { ...card, item } : card);
+      });
+    });
     return () => { channel.unsubscribe(); };
   }, [accessState, sessionId]);
 
@@ -218,6 +254,30 @@ export default function ManagePage() {
     }
   };
 
+  const handleUndo = async () => {
+    if (!undoTarget?.item.scanned_at || acting) return;
+    const target = undoTarget;
+    setActing(true);
+    setActionMessage(null);
+    try {
+      const result = await db.undoItemCheckIn(sessionId, target.item.id, target.item.scanned_at!, 'Manage', 'manage');
+      if (result.status === 'undone' && result.item) {
+        setCards(prev => prev.map(card => card.item.id === result.item!.id ? { ...card, item: result.item! } : card));
+        pinTemporarily(result.item.id);
+        setActionMessage(`${target.item.name} check-in undone.`);
+      } else {
+        setActionMessage(result.status === 'stale'
+          ? 'Check-in changed elsewhere. Refresh before trying again.'
+          : 'Guest no longer exists.');
+      }
+      setUndoTarget(null);
+    } catch {
+      setActionMessage('Could not undo check-in. Try again.');
+    } finally {
+      setActing(false);
+    }
+  };
+
   const handleLock = () => {
     sessionStorage.removeItem(manageAccessStorageKey(sessionId));
     setSettingsOpen(false);
@@ -264,7 +324,7 @@ export default function ManagePage() {
     : activeCards;
 
   const displayActive = sortedActive(filteredActive, pinnedId);
-  const displayRemoved = sortedRemoved(removedCards);
+  const displayRemoved = sortedRemoved(removedCards, pinnedId);
 
   const handleTallyClick = (f: TallyFilter) => {
     setTallyFilter(prev => (prev === f && f !== 'total') ? 'total' : f);
@@ -366,6 +426,11 @@ export default function ManagePage() {
                 {emailSummary}
               </div>
             )}
+          </div>
+        )}
+        {actionMessage && (
+          <div role="status" aria-live="polite" style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: '#f0f0ed', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#5a5a56' }}>
+            {actionMessage}
           </div>
         )}
       </div>
@@ -476,10 +541,11 @@ export default function ManagePage() {
                     {emailBusy ? '...' : card.item.qr_email_sent_at ? 'Resend' : 'Send'}
                   </button>
                   <button
-                    onClick={() => setRemoveTarget(card)}
-                    style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 8, border: '1px solid #e2e2de', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#b4b4b0', fontSize: 16 }}
+                    onClick={() => { setActionMessage(null); setActionTarget(card); }}
+                    aria-label={`Actions for ${card.item.name}`}
+                    style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 8, border: '1px solid #e2e2de', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#6a6a66', fontSize: 18 }}
                   >
-                    ×
+                    ⋯
                   </button>
                 </div>
                 {qrOpen && (
@@ -500,7 +566,7 @@ export default function ManagePage() {
             <div style={{ textAlign: 'center', padding: '48px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#b4b4b0', letterSpacing: '0.1em' }}>NO REMOVED GUESTS</div>
           )}
           {displayRemoved.map(card => (
-            <div key={card.item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#fff', border: '1px solid #ececea', borderRadius: 14, padding: '12px 12px 12px 14px', opacity: 0.7 }}>
+            <div key={card.item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: card.item.id === pinnedId ? 'oklch(0.96 0.04 152)' : '#fff', border: `1px solid ${card.item.id === pinnedId ? 'oklch(0.82 0.1 152)' : '#ececea'}`, borderRadius: 14, padding: '12px 12px 12px 14px', opacity: card.item.id === pinnedId ? 1 : 0.7, transition: 'background 0.4s, border-color 0.4s' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#6a6a66' }}>{card.item.name}</div>
                 <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#b4b4b0', marginTop: 3, letterSpacing: '0.04em' }}>{card.item.barcode}</div>
@@ -510,6 +576,13 @@ export default function ManagePage() {
                 style={{ flexShrink: 0, padding: '7px 13px', borderRadius: 8, border: '1px solid #e2e2de', background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#161618', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
               >
                 Restore
+              </button>
+              <button
+                onClick={() => { setActionMessage(null); setActionTarget(card); }}
+                aria-label={`Actions for ${card.item.name}`}
+                style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 8, border: '1px solid #e2e2de', background: '#fff', fontSize: 18, cursor: 'pointer', color: '#6a6a66' }}
+              >
+                ⋯
               </button>
             </div>
           ))}
@@ -531,6 +604,46 @@ export default function ManagePage() {
       </div>
 
       {/* Remove confirmation sheet */}
+      {actionTarget && (
+        <div onClick={() => setActionTarget(null)} style={{ position: 'fixed', inset: 0, zIndex: 45, background: 'rgba(20,20,22,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={event => event.stopPropagation()} role="dialog" aria-label={`Actions for ${actionTarget.item.name}`} style={{ width: '100%', maxWidth: 480, background: '#fbfbfa', borderRadius: '22px 22px 0 0', padding: '22px 20px 30px', animation: 'sheetUp 0.28s cubic-bezier(0.16,1,0.3,1)' }}>
+            <div style={{ width: 38, height: 4, background: '#dcdcd8', borderRadius: 999, margin: '0 auto 18px' }} />
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>{actionTarget.item.name}</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#9a9a96', marginBottom: 16 }}>{actionTarget.item.barcode}</div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              <button disabled style={{ height: 46, borderRadius: 10, border: '1px solid #e2e2de', background: '#f4f4f2', color: '#b4b4b0', fontSize: 14, fontWeight: 600 }}>Edit (coming soon)</button>
+              {actionTarget.item.email && !actionTarget.item.removed && (
+                <button onClick={() => { const target = actionTarget; setActionTarget(null); void handleSendOne(target); }} disabled={emailSending.has(actionTarget.item.id)} style={{ height: 46, borderRadius: 10, border: '1px solid #e2e2de', background: '#fff', color: '#161618', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                  {actionTarget.item.qr_email_sent_at ? 'Resend QR email' : 'Send QR email'}
+                </button>
+              )}
+              {actionTarget.item.scanned && (
+                <button onClick={() => { setUndoTarget(actionTarget); setActionTarget(null); }} style={{ height: 46, borderRadius: 10, border: '1px solid #e2e2de', background: '#fff', color: '#161618', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Undo check-in</button>
+              )}
+              {!actionTarget.item.removed && (
+                <button onClick={() => { setRemoveTarget(actionTarget); setActionTarget(null); }} style={{ height: 46, borderRadius: 10, border: 'none', background: '#161618', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Remove guest</button>
+              )}
+              <button onClick={() => setActionTarget(null)} style={{ height: 46, borderRadius: 10, border: 'none', background: 'transparent', color: '#6a6a66', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {undoTarget && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(20,20,22,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div role="alertdialog" aria-label={`Undo check-in for ${undoTarget.item.name}`} style={{ width: '100%', maxWidth: 480, background: '#fbfbfa', borderRadius: '22px 22px 0 0', padding: '24px 20px 32px', animation: 'sheetUp 0.28s cubic-bezier(0.16,1,0.3,1)' }}>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 10 }}>Undo check-in?</div>
+            <div style={{ fontSize: 14, color: '#5a5a5e', marginBottom: 18, lineHeight: 1.5 }}>
+              <strong>{undoTarget.item.name}</strong> will return to pending. {undoTarget.item.removed ? 'They will remain in Removed.' : 'Their QR can be checked in again.'}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setUndoTarget(null)} disabled={acting} style={{ flex: 1, height: 50, borderRadius: 12, border: '1px solid #e2e2de', background: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleUndo} disabled={acting} style={{ flex: 1, height: 50, borderRadius: 12, border: 'none', background: '#161618', color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>{acting ? 'Undoing…' : 'Undo check-in'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {removeTarget && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(20,20,22,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
           <div style={{ width: '100%', maxWidth: 480, background: '#fbfbfa', borderRadius: '22px 22px 0 0', padding: '24px 20px 32px', animation: 'sheetUp 0.28s cubic-bezier(0.16,1,0.3,1)' }}>

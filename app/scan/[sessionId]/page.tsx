@@ -8,7 +8,9 @@ import { Scanner } from '@/components/Scanner';
 import { ProgressCard } from '@/components/ProgressCard';
 import { ItemList } from '@/components/ItemList';
 import { ResultFlood, ScanResultFlood } from '@/components/ResultFlood';
-import { ScanResult } from '@/lib/types';
+import { CheckInSource, ScanResult } from '@/lib/types';
+
+type UndoCandidate = { itemId: string; name: string; barcode: string; scannedAt: string; source: CheckInSource };
 
 function beep(type: 'admit' | 'already' | 'nomatch') {
   try {
@@ -48,6 +50,10 @@ export default function ScannerPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [listFull, setListFull] = useState(false);
   const floodTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [undoCandidate, setUndoCandidate] = useState<UndoCandidate | null>(null);
+  const [undoRunning, setUndoRunning] = useState(false);
+  const [undoMessage, setUndoMessage] = useState('');
 
   useEffect(() => {
     const name = localStorage.getItem('gate_name');
@@ -90,9 +96,40 @@ export default function ScannerPage() {
     floodTimer.current = setTimeout(() => setFlood(null), result.type === 'admit' ? 1500 : 2000);
   }, []);
 
-  const handleScanComplete = useCallback((result: ScanResult) => {
+  const clearUndo = useCallback(() => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndoCandidate(null);
+    setUndoMessage('');
+  }, []);
+
+  const handleCameraScanStart = useCallback((barcode: string) => {
+    if (!undoCandidate) return true;
+    if (barcode !== undoCandidate.barcode) {
+      clearUndo();
+      return true;
+    }
+    return false;
+  }, [undoCandidate, clearUndo]);
+
+  const startUndoWindow = useCallback((candidate: UndoCandidate) => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndoCandidate(candidate);
+    setUndoMessage('');
+    // The action appears after the 1.5 second result flood, then remains for 8 seconds.
+    undoTimer.current = setTimeout(() => setUndoCandidate(null), 9500);
+  }, []);
+
+  useEffect(() => () => {
+    if (floodTimer.current) clearTimeout(floodTimer.current);
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+  }, []);
+
+  const handleScanComplete = useCallback((result: ScanResult, source: CheckInSource = 'camera') => {
     setLastScan({ barcode: result.item?.barcode || '', result: result.type, message: result.message, timestamp: Date.now() });
     if (result.success && result.item) updateItem(result.item);
+    if (result.success && result.item?.scanned_at) {
+      startUndoWindow({ itemId: result.item.id, name: result.item.name, barcode: result.item.barcode, scannedAt: result.item.scanned_at, source });
+    }
 
     const type = result.type === 'success' ? 'admit' : result.type === 'duplicate' ? 'already' : 'nomatch';
     beep(type); buzz(type);
@@ -109,7 +146,29 @@ export default function ScannerPage() {
           ? 'Entered earlier · This gate'
           : 'Code ' + (result.item?.barcode ?? '—'),
     });
-  }, [setLastScan, updateItem, showFlood]);
+  }, [setLastScan, updateItem, showFlood, startUndoWindow]);
+
+  const handleUndo = async () => {
+    if (!undoCandidate || undoRunning) return;
+    const candidate = undoCandidate;
+    setUndoRunning(true);
+    try {
+      const result = await db.undoItemCheckIn(sessionId, candidate.itemId, candidate.scannedAt, gateName, candidate.source);
+      if (result.status === 'undone' && result.item) {
+        updateItem(result.item);
+        setUndoMessage(`${candidate.name} check-in undone`);
+      } else {
+        setUndoMessage(result.status === 'stale' ? 'Could not undo: check-in changed elsewhere' : 'Could not undo: guest not found');
+      }
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+      setUndoCandidate(null);
+      setTimeout(() => setUndoMessage(''), 3500);
+    } catch {
+      setUndoMessage('Could not undo check-in. Try again.');
+    } finally {
+      setUndoRunning(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -144,7 +203,20 @@ export default function ScannerPage() {
         </div>
 
         {/* Camera hero — collapsed (not unmounted) when list is fullscreen */}
-        <Scanner sessionId={sessionId} onScanComplete={handleScanComplete} hidden={listFull} />
+        <Scanner sessionId={sessionId} onScanComplete={handleScanComplete} onScanStart={handleCameraScanStart} hidden={listFull} />
+
+        {!flood && (undoCandidate || undoMessage) && (
+          <div role="status" aria-live="polite" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: undoMessage ? '#f4f4f2' : 'oklch(0.96 0.04 152)', borderBottom: '1px solid #e2e2de' }}>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {undoMessage || `${undoCandidate?.name} checked in`}
+            </div>
+            {undoCandidate && (
+              <button type="button" onClick={handleUndo} disabled={undoRunning} aria-label={`Undo check-in for ${undoCandidate.name}`} style={{ border: '1px solid #cfcfca', borderRadius: 8, background: '#fff', padding: '7px 13px', fontSize: 12, fontWeight: 700, cursor: undoRunning ? 'default' : 'pointer' }}>
+                {undoRunning ? 'Undoing…' : 'Undo'}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Pull tab */}
         {listFull ? (

@@ -8,21 +8,29 @@ import { ScanResult } from '@/lib/types';
 interface ScannerProps {
   sessionId: string;
   onScanComplete: (result: ScanResult) => void;
+  onScanStart?: (barcode: string) => boolean;
   hidden?: boolean;
 }
 
 type CamStatus = 'idle' | 'loading' | 'live' | 'denied';
 type FacingMode = 'user' | 'environment';
 
-export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
+export function Scanner({ sessionId, onScanComplete, onScanStart, hidden }: ScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const pausedRef = useRef(false);
+  const onScanStartRef = useRef(onScanStart);
+  const onScanCompleteRef = useRef(onScanComplete);
   const [camStatus, setCamStatus] = useState<CamStatus>('idle');
   const [camError, setCamError] = useState('');
   const [facingMode, setFacingMode] = useState<FacingMode>('environment');
   const [canSwitchCamera, setCanSwitchCamera] = useState(false);
+
+  useEffect(() => {
+    onScanStartRef.current = onScanStart;
+    onScanCompleteRef.current = onScanComplete;
+  }, [onScanStart, onScanComplete]);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -94,14 +102,17 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
       const code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
 
       if (code?.data) {
-        pausedRef.current = true;
-        processScan(code.data).then(result => {
-          onScanComplete(result);
-          setTimeout(() => { pausedRef.current = false; }, 1800);
-        }).catch(() => {
-          onScanComplete({ success: false, message: 'Scan error', type: 'not_found' });
-          setTimeout(() => { pausedRef.current = false; }, 1800);
-        });
+        const shouldProcess = onScanStartRef.current?.(code.data) ?? true;
+        if (shouldProcess) {
+          pausedRef.current = true;
+          processScan(code.data).then(result => {
+            onScanCompleteRef.current(result);
+            setTimeout(() => { pausedRef.current = false; }, 1800);
+          }).catch(() => {
+            onScanCompleteRef.current({ success: false, message: 'Scan error', type: 'not_found' });
+            setTimeout(() => { pausedRef.current = false; }, 1800);
+          });
+        }
       }
 
       rafRef.current = requestAnimationFrame(scanLoop);
@@ -129,7 +140,7 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
         type: 'duplicate',
       };
     }
-    const scanned = await db.scanItem(item.id, gateName);
+    const scanned = await db.scanItem(sessionId, item.id, gateName);
     if (!scanned) {
       db.logScanAttempt(item.id, sessionId, gateName, true);
       const fresh = await db.getItemByBarcode(sessionId, barcode);

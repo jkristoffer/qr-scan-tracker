@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import type { CheckInSource, Item, UndoCheckInResult } from './types';
 
 let _client: SupabaseClient | null = null;
 const SESSION_COLUMNS = 'id,name,created_at,archived';
@@ -189,7 +190,18 @@ export const db = {
     return data;
   },
 
-  async scanItem(itemId: string, scannedBy: string) {
+  async getItemById(sessionId: string, itemId: string) {
+    const { data, error } = await getClient()
+      .from('items')
+      .select('*')
+      .eq('session_id', sessionId)
+      .eq('id', itemId)
+      .maybeSingle();
+    if (error) throw error;
+    return data as Item | null;
+  },
+
+  async scanItem(sessionId: string, itemId: string, scannedBy: string) {
     const { data, error } = await getClient()
       .from('items')
       .update({
@@ -198,7 +210,9 @@ export const db = {
         scanned_by: scannedBy,
       })
       .eq('id', itemId)
+      .eq('session_id', sessionId)
       .eq('scanned', false)
+      .eq('removed', false)
       .select()
       .maybeSingle();
     if (error) throw error;
@@ -249,10 +263,41 @@ export const db = {
     return data;
   },
 
-  async logScanAttempt(itemId: string, sessionId: string, gateName: string, isDuplicate: boolean) {
+  async logScanAttempt(
+    itemId: string,
+    sessionId: string,
+    gateName: string,
+    isDuplicate: boolean,
+    source: CheckInSource = 'camera'
+  ) {
     await getClient()
       .from('scan_attempts')
-      .insert({ item_id: itemId, session_id: sessionId, gate_name: gateName, is_duplicate: isDuplicate });
+      .insert({
+        item_id: itemId,
+        session_id: sessionId,
+        gate_name: gateName,
+        is_duplicate: isDuplicate,
+        event_type: isDuplicate ? 'duplicate' : 'check_in',
+        source,
+      });
+  },
+
+  async undoItemCheckIn(
+    sessionId: string,
+    itemId: string,
+    expectedScannedAt: string,
+    actorLabel: string,
+    source: CheckInSource
+  ): Promise<UndoCheckInResult> {
+    const { data, error } = await getClient().rpc('undo_item_check_in', {
+      p_session_id: sessionId,
+      p_item_id: itemId,
+      p_expected_scanned_at: expectedScannedAt,
+      p_actor_label: actorLabel,
+      p_source: source,
+    });
+    if (error) throw error;
+    return data as UndoCheckInResult;
   },
 
   async removeItem(itemId: string) {
