@@ -1,12 +1,20 @@
 'use client';
 
 import { useScanStore } from '@/store/useScanStore';
+import type { Item } from '@/lib/types';
 
 function initials(name: string) {
   return name.split(' ').map(x => x[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
 }
 
-export function ItemList() {
+interface ItemListProps {
+  onManualCheckIn: (item: Item) => void;
+  pendingItemId: string | null;
+  failedItemId: string | null;
+  admissionBusy: boolean;
+}
+
+export function ItemList({ onManualCheckIn, pendingItemId, failedItemId, admissionBusy }: ItemListProps) {
   const { filteredItems, searchQuery, setSearchQuery, lastScan } = useScanStore();
 
   const lastBarcode = lastScan?.result === 'success' ? lastScan.barcode : null;
@@ -17,6 +25,7 @@ export function ItemList() {
       <div style={{ padding: '8px 4px 10px' }}>
         <input
           type="text"
+          aria-label="Search guests"
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           placeholder="Search guests…"
@@ -35,6 +44,8 @@ export function ItemList() {
       {filteredItems.map(item => {
         const isIn = item.scanned;
         const isFlash = item.barcode === lastBarcode;
+        const isPending = item.id === pendingItemId;
+        const hasFailed = item.id === failedItemId;
         return (
           <div
             key={item.id}
@@ -69,20 +80,41 @@ export function ItemList() {
                   ? `This gate · ${item.scanned_at ? new Date(item.scanned_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}`
                   : item.barcode}
               </div>
+              {hasFailed && !isIn && (
+                <div role="alert" style={{ marginTop: 5, color: '#a1261f', fontSize: 12, fontWeight: 600 }}>
+                  Couldn’t check in. Try again.
+                </div>
+              )}
             </div>
 
-            {/* Badge */}
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: isIn ? '#161618' : 'transparent',
-              color: isIn ? '#ffffff' : '#9a9a96',
-              border: `1px solid ${isIn ? '#161618' : '#dadad6'}`,
-              borderRadius: 999, padding: '6px 12px',
-              fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
-              flexShrink: 0,
-            }}>
-              {isIn ? 'IN ✓' : 'OUT'}
-            </div>
+            {isIn ? (
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: '#161618', color: '#ffffff', border: '1px solid #161618',
+                borderRadius: 999, padding: '6px 12px',
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
+                flexShrink: 0,
+              }}>
+                IN ✓
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onManualCheckIn(item)}
+                disabled={admissionBusy}
+                aria-busy={isPending}
+                aria-label={`Check in ${item.name}`}
+                style={{
+                  minHeight: 44, minWidth: 92, padding: '8px 12px', flexShrink: 0,
+                  border: `1px solid ${hasFailed && !admissionBusy ? '#a1261f' : admissionBusy ? '#cfcfca' : '#161618'}`,
+                  borderRadius: 10, background: admissionBusy ? '#ededeb' : '#fff',
+                  color: isPending || admissionBusy ? '#6f6f6b' : '#161618', cursor: admissionBusy ? 'default' : 'pointer',
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
+                }}
+              >
+                {isPending ? 'CHECKING…' : 'CHECK IN'}
+              </button>
+            )}
           </div>
         );
       })}

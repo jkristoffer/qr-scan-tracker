@@ -9,6 +9,7 @@ import { ProgressCard } from '@/components/ProgressCard';
 import { ItemList } from '@/components/ItemList';
 import { ResultFlood, ScanResultFlood } from '@/components/ResultFlood';
 import { CheckInSource, ScanResult } from '@/lib/types';
+import { checkInKnownItem } from '@/lib/checkIn';
 
 type UndoCandidate = { itemId: string; name: string; barcode: string; scannedAt: string; source: CheckInSource };
 
@@ -54,6 +55,10 @@ export default function ScannerPage() {
   const [undoCandidate, setUndoCandidate] = useState<UndoCandidate | null>(null);
   const [undoRunning, setUndoRunning] = useState(false);
   const [undoMessage, setUndoMessage] = useState('');
+  const [pendingItemId, setPendingItemId] = useState<string | null>(null);
+  const [failedItemId, setFailedItemId] = useState<string | null>(null);
+  const admissionOwnerRef = useRef<'camera' | 'manual' | null>(null);
+  const [admissionBusy, setAdmissionBusy] = useState(false);
 
   useEffect(() => {
     const name = localStorage.getItem('gate_name');
@@ -103,13 +108,12 @@ export default function ScannerPage() {
   }, []);
 
   const handleCameraScanStart = useCallback((barcode: string) => {
-    if (!undoCandidate) return true;
-    if (barcode !== undoCandidate.barcode) {
-      clearUndo();
-      return true;
-    }
-    return false;
-  }, [undoCandidate, clearUndo]);
+    if (admissionOwnerRef.current) return false;
+    clearUndo();
+    admissionOwnerRef.current = 'camera';
+    setAdmissionBusy(true);
+    return true;
+  }, [clearUndo]);
 
   const startUndoWindow = useCallback((candidate: UndoCandidate) => {
     if (undoTimer.current) clearTimeout(undoTimer.current);
@@ -125,8 +129,12 @@ export default function ScannerPage() {
   }, []);
 
   const handleScanComplete = useCallback((result: ScanResult, source: CheckInSource = 'camera') => {
+    if (source === 'camera' && admissionOwnerRef.current === 'camera') {
+      admissionOwnerRef.current = null;
+      setAdmissionBusy(false);
+    }
     setLastScan({ barcode: result.item?.barcode || '', result: result.type, message: result.message, timestamp: Date.now() });
-    if (result.success && result.item) updateItem(result.item);
+    if (result.item) updateItem(result.item);
     if (result.success && result.item?.scanned_at) {
       startUndoWindow({ itemId: result.item.id, name: result.item.name, barcode: result.item.barcode, scannedAt: result.item.scanned_at, source });
     }
@@ -169,6 +177,28 @@ export default function ScannerPage() {
       setUndoRunning(false);
     }
   };
+
+  const handleManualCheckIn = useCallback(async (item: Parameters<typeof checkInKnownItem>[0]) => {
+    if (admissionOwnerRef.current) return;
+    admissionOwnerRef.current = 'manual';
+    setAdmissionBusy(true);
+    clearUndo();
+    setFailedItemId(null);
+    setPendingItemId(item.id);
+
+    try {
+      const result = await checkInKnownItem(item, sessionId, gateName, 'manual');
+      handleScanComplete(result, 'manual');
+    } catch {
+      setFailedItemId(item.id);
+    } finally {
+      if (admissionOwnerRef.current === 'manual') {
+        admissionOwnerRef.current = null;
+        setAdmissionBusy(false);
+      }
+      setPendingItemId(null);
+    }
+  }, [clearUndo, gateName, handleScanComplete, sessionId]);
 
   if (loading) {
     return (
@@ -255,7 +285,12 @@ export default function ScannerPage() {
         {showPanel && (
           <>
             <ProgressCard progress={progress} isConnected={isConnected} />
-            <ItemList />
+            <ItemList
+              onManualCheckIn={handleManualCheckIn}
+              pendingItemId={pendingItemId}
+              failedItemId={failedItemId}
+              admissionBusy={admissionBusy}
+            />
           </>
         )}
 

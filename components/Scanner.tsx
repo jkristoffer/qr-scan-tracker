@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
 import { db } from '@/lib/supabase';
+import { checkInKnownItem } from '@/lib/checkIn';
 import { ScanResult } from '@/lib/types';
 
 interface ScannerProps {
@@ -20,6 +21,8 @@ export function Scanner({ sessionId, onScanComplete, onScanStart, hidden }: Scan
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const pausedRef = useRef(false);
+  const processedVisibleCodeRef = useRef<string | null>(null);
+  const noCodeSinceRef = useRef<number | null>(null);
   const onScanStartRef = useRef(onScanStart);
   const onScanCompleteRef = useRef(onScanComplete);
   const [camStatus, setCamStatus] = useState<CamStatus>('idle');
@@ -35,6 +38,8 @@ export function Scanner({ sessionId, onScanComplete, onScanStart, hidden }: Scan
   useEffect(() => {
     let stream: MediaStream | null = null;
     let active = true;
+    processedVisibleCodeRef.current = null;
+    noCodeSinceRef.current = null;
 
     const start = async () => {
       setCamStatus('loading');
@@ -102,8 +107,15 @@ export function Scanner({ sessionId, onScanComplete, onScanStart, hidden }: Scan
       const code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
 
       if (code?.data) {
+        noCodeSinceRef.current = null;
+        if (processedVisibleCodeRef.current === code.data) {
+          rafRef.current = requestAnimationFrame(scanLoop);
+          return;
+        }
+
         const shouldProcess = onScanStartRef.current?.(code.data) ?? true;
         if (shouldProcess) {
+          processedVisibleCodeRef.current = code.data;
           pausedRef.current = true;
           processScan(code.data).then(result => {
             onScanCompleteRef.current(result);
@@ -112,6 +124,14 @@ export function Scanner({ sessionId, onScanComplete, onScanStart, hidden }: Scan
             onScanCompleteRef.current({ success: false, message: 'Scan error', type: 'not_found' });
             setTimeout(() => { pausedRef.current = false; }, 1800);
           });
+        }
+      } else if (processedVisibleCodeRef.current) {
+        const now = performance.now();
+        if (noCodeSinceRef.current === null) {
+          noCodeSinceRef.current = now;
+        } else if (now - noCodeSinceRef.current >= 500) {
+          processedVisibleCodeRef.current = null;
+          noCodeSinceRef.current = null;
         }
       }
 
@@ -123,6 +143,8 @@ export function Scanner({ sessionId, onScanComplete, onScanStart, hidden }: Scan
     return () => {
       active = false;
       cancelAnimationFrame(rafRef.current);
+      processedVisibleCodeRef.current = null;
+      noCodeSinceRef.current = null;
       stream?.getTracks().forEach(t => t.stop());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -132,22 +154,7 @@ export function Scanner({ sessionId, onScanComplete, onScanStart, hidden }: Scan
     const gateName = localStorage.getItem('gate_name') || 'Gate';
     const item = await db.getItemByBarcode(sessionId, barcode);
     if (!item) return { success: false, message: 'Not found', type: 'not_found' };
-    if (item.scanned) {
-      db.logScanAttempt(item.id, sessionId, gateName, true);
-      return {
-        success: false, item,
-        message: `Already checked in${item.scanned_by ? ` · ${item.scanned_by}` : ''}`,
-        type: 'duplicate',
-      };
-    }
-    const scanned = await db.scanItem(sessionId, item.id, gateName);
-    if (!scanned) {
-      db.logScanAttempt(item.id, sessionId, gateName, true);
-      const fresh = await db.getItemByBarcode(sessionId, barcode);
-      return { success: false, item: fresh || undefined, message: 'Just checked in by another gate', type: 'duplicate' };
-    }
-    db.logScanAttempt(item.id, sessionId, gateName, false);
-    return { success: true, item: scanned, message: scanned.name, type: 'success' };
+    return checkInKnownItem(item, sessionId, gateName, 'camera');
   };
 
   const handleRetry = () => {
