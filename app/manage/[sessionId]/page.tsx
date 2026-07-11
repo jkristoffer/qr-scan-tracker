@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ManageAccessGate } from '@/components/ManageAccessGate';
 import { ManageSecuritySheet } from '@/components/ManageSecuritySheet';
+import { GuestEditSheet } from '@/components/GuestEditSheet';
 import { manageAccessStorageKey } from '@/lib/managePassword';
 import { db } from '@/lib/supabase';
 import { toQrDataUrl } from '@/lib/qr';
@@ -54,6 +55,7 @@ export default function ManagePage() {
   const [removeTarget, setRemoveTarget] = useState<GuestCard | null>(null);
   const [actionTarget, setActionTarget] = useState<GuestCard | null>(null);
   const [undoTarget, setUndoTarget] = useState<GuestCard | null>(null);
+  const [editTarget, setEditTarget] = useState<GuestCard | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
   const [pinnedId, setPinnedId] = useState<string | undefined>(undefined);
@@ -252,6 +254,13 @@ export default function ManagePage() {
     } catch {
       /* ignore */
     }
+  };
+
+  const handleEditSaved = (item: Item, dataUrl?: string) => {
+    setCards(prev => prev.map(card => card.item.id === item.id ? { ...card, item, dataUrl: dataUrl || card.dataUrl } : card));
+    setEditTarget(null);
+    pinTemporarily(item.id);
+    setActionMessage(`${item.name} updated. Corrected pass is ready to send or print.`);
   };
 
   const handleUndo = async () => {
@@ -611,7 +620,7 @@ export default function ManagePage() {
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>{actionTarget.item.name}</div>
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#9a9a96', marginBottom: 16 }}>{actionTarget.item.barcode}</div>
             <div style={{ display: 'grid', gap: 8 }}>
-              <button disabled style={{ height: 46, borderRadius: 10, border: '1px solid #e2e2de', background: '#f4f4f2', color: '#b4b4b0', fontSize: 14, fontWeight: 600 }}>Edit (coming soon)</button>
+              <button onClick={() => { setEditTarget(actionTarget); setActionTarget(null); }} style={{ height: 46, borderRadius: 10, border: '1px solid #e2e2de', background: '#fff', color: '#161618', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Edit guest</button>
               {actionTarget.item.email && !actionTarget.item.removed && (
                 <button onClick={() => { const target = actionTarget; setActionTarget(null); void handleSendOne(target); }} disabled={emailSending.has(actionTarget.item.id)} style={{ height: 46, borderRadius: 10, border: '1px solid #e2e2de', background: '#fff', color: '#161618', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                   {actionTarget.item.qr_email_sent_at ? 'Resend QR email' : 'Send QR email'}
@@ -642,6 +651,15 @@ export default function ManagePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {editTarget && (
+        <GuestEditSheet
+          sessionId={sessionId}
+          item={editTarget.item}
+          onClose={() => setEditTarget(null)}
+          onSaved={handleEditSaved}
+        />
       )}
 
       {removeTarget && (

@@ -1,5 +1,11 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { CheckInSource, Item, UndoCheckInResult } from './types';
+import type {
+  CheckInSource,
+  Item,
+  ReplaceTicketCodeResult,
+  UndoCheckInResult,
+  UpdateItemDetailsInput,
+} from './types';
 
 let _client: SupabaseClient | null = null;
 const SESSION_COLUMNS = 'id,name,created_at,archived';
@@ -199,6 +205,66 @@ export const db = {
       .maybeSingle();
     if (error) throw error;
     return data as Item | null;
+  },
+
+  async updateItemDetails(
+    sessionId: string,
+    itemId: string,
+    input: UpdateItemDetailsInput
+  ): Promise<Item | null> {
+    const { data: currentData, error: currentError } = await getClient()
+      .from('items')
+      .select('*')
+      .eq('session_id', sessionId)
+      .eq('id', itemId)
+      .maybeSingle();
+    if (currentError) throw currentError;
+    const current = currentData as Item | null;
+    if (!current) return null;
+
+    const name = input.name.trim();
+    const email = input.email?.trim() || null;
+    if (current.name === name && current.email === email) return current;
+
+    const { data, error } = await getClient()
+      .from('items')
+      .update({
+        name,
+        email,
+        qr_email_sent_at: null,
+        qr_email_resend_id: null,
+        qr_email_last_error: null,
+      })
+      .eq('session_id', sessionId)
+      .eq('id', itemId)
+      .select()
+      .maybeSingle();
+    if (error) throw error;
+    return data as Item | null;
+  },
+
+  async replaceItemTicketCode(
+    sessionId: string,
+    itemId: string,
+    expectedCode: string,
+    newCode: string
+  ): Promise<ReplaceTicketCodeResult> {
+    const { data, error } = await getClient().rpc('replace_item_ticket_code', {
+      p_session_id: sessionId,
+      p_item_id: itemId,
+      p_expected_code: expectedCode,
+      p_new_code: newCode,
+    });
+    if (error) throw error;
+    return data as ReplaceTicketCodeResult;
+  },
+
+  async suggestNextTicketCode(sessionId: string): Promise<string> {
+    const { data, error } = await getClient().rpc('suggest_next_ticket_code', {
+      p_session_id: sessionId,
+    });
+    if (error) throw error;
+    return data as string;
   },
 
   async scanItem(sessionId: string, itemId: string, scannedBy: string) {

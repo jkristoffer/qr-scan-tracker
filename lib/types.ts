@@ -46,3 +46,15 @@ export interface UndoCheckInResult {
   status: UndoCheckInStatus;
   item: Item | null;
 }
+
+export interface UpdateItemDetailsInput {
+  name: string;
+  email: string | null;
+}
+
+export type ReplaceTicketCodeStatus = 'replaced' | 'stale' | 'code_unavailable' | 'not_found';
+
+export interface ReplaceTicketCodeResult {
+  status: ReplaceTicketCodeStatus;
+  item: Item | null;
+}
