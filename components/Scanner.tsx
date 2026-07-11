@@ -12,6 +12,7 @@ interface ScannerProps {
 }
 
 type CamStatus = 'idle' | 'loading' | 'live' | 'denied';
+type FacingMode = 'user' | 'environment';
 
 export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -20,31 +21,51 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
   const pausedRef = useRef(false);
   const [camStatus, setCamStatus] = useState<CamStatus>('idle');
   const [camError, setCamError] = useState('');
+  const [facingMode, setFacingMode] = useState<FacingMode>('environment');
+  const [canSwitchCamera, setCanSwitchCamera] = useState(false);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
+    let active = true;
 
     const start = async () => {
       setCamStatus('loading');
+      setCamError('');
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
+          video: { facingMode: { ideal: facingMode } },
           audio: false,
         });
+        if (!active) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
         const video = videoRef.current;
         if (!video) return;
         video.srcObject = stream;
         video.setAttribute('playsinline', 'true');
         await video.play();
+        if (!active) return;
+
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          if (active) {
+            setCanSwitchCamera(devices.filter(device => device.kind === 'videoinput').length > 1);
+          }
+        } catch {
+          setCanSwitchCamera(false);
+        }
         setCamStatus('live');
         scanLoop();
       } catch (err: any) {
+        if (!active) return;
         setCamError(String(err?.message || err));
         setCamStatus('denied');
       }
     };
 
     const scanLoop = () => {
+      if (!active) return;
       const video = videoRef.current;
       const canvas = canvasRef.current;
       if (!video || !canvas || video.readyState < 2) {
@@ -89,11 +110,12 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
     start();
 
     return () => {
+      active = false;
       cancelAnimationFrame(rafRef.current);
       stream?.getTracks().forEach(t => t.stop());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [facingMode]);
 
   const processScan = async (barcode: string): Promise<ScanResult> => {
     const gateName = localStorage.getItem('gate_name') || 'Gate';
@@ -122,6 +144,11 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
     setCamError('');
     // Remount by reloading — simplest retry path
     window.location.reload();
+  };
+
+  const handleSwitchCamera = () => {
+    pausedRef.current = false;
+    setFacingMode(current => current === 'environment' ? 'user' : 'environment');
   };
 
   return (
@@ -160,6 +187,17 @@ export function Scanner({ sessionId, onScanComplete, hidden }: ScannerProps) {
 
       {camStatus === 'live' && (
         <>
+          {canSwitchCamera ? (
+            <button
+              type="button"
+              onClick={handleSwitchCamera}
+              aria-label={`Switch to ${facingMode === 'environment' ? 'front' : 'back'} camera`}
+              title={`Switch to ${facingMode === 'environment' ? 'front' : 'back'} camera`}
+              style={{ position: 'absolute', zIndex: 2, top: 16, right: 16, width: 44, height: 44, border: '1px solid rgba(255,255,255,0.35)', borderRadius: '50%', background: 'rgba(11,11,13,0.68)', color: '#fff', fontSize: 23, lineHeight: 1, cursor: 'pointer', backdropFilter: 'blur(6px)' }}
+            >
+              ↻
+            </button>
+          ) : null}
           <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 210, height: 158, pointerEvents: 'none' }}>
             <div style={{ position: 'absolute', top: 0, left: 0, width: 36, height: 36, borderTop: '4px solid #fff', borderLeft: '4px solid #fff', borderRadius: '5px 0 0 0', animation: 'reticle 1.8s ease-in-out infinite' }} />
             <div style={{ position: 'absolute', top: 0, right: 0, width: 36, height: 36, borderTop: '4px solid #fff', borderRight: '4px solid #fff', borderRadius: '0 5px 0 0', animation: 'reticle 1.8s ease-in-out infinite' }} />
