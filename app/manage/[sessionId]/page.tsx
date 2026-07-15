@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ManageAccessGate } from '@/components/ManageAccessGate';
 import { ManageSecuritySheet } from '@/components/ManageSecuritySheet';
 import { GuestEditSheet } from '@/components/GuestEditSheet';
+import { QrPostcardSheet } from '@/components/QrPostcardSheet';
 import { manageAccessStorageKey } from '@/lib/managePassword';
 import { db } from '@/lib/supabase';
 import { toQrDataUrl } from '@/lib/qr';
@@ -56,6 +57,7 @@ export default function ManagePage() {
   const [actionTarget, setActionTarget] = useState<GuestCard | null>(null);
   const [undoTarget, setUndoTarget] = useState<GuestCard | null>(null);
   const [editTarget, setEditTarget] = useState<GuestCard | null>(null);
+  const [postcardTarget, setPostcardTarget] = useState<GuestCard | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
   const [pinnedId, setPinnedId] = useState<string | undefined>(undefined);
@@ -558,8 +560,15 @@ export default function ManagePage() {
                   </button>
                 </div>
                 {qrOpen && (
-                  <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, paddingTop: 12 }}>
                     <img src={card.dataUrl} alt={card.item.barcode} style={{ width: 120, height: 120, borderRadius: 8 }} />
+                    <button
+                      type="button"
+                      onClick={() => setPostcardTarget(card)}
+                      style={{ minHeight: 40, padding: '8px 14px', borderRadius: 9, border: '1px solid #e2e2de', background: '#fff', color: '#161618', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      View, save or share pass
+                    </button>
                   </div>
                 )}
               </div>
@@ -620,6 +629,9 @@ export default function ManagePage() {
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>{actionTarget.item.name}</div>
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#9a9a96', marginBottom: 16 }}>{actionTarget.item.barcode}</div>
             <div style={{ display: 'grid', gap: 8 }}>
+              {!actionTarget.item.removed && (
+                <button onClick={() => { setPostcardTarget(actionTarget); setActionTarget(null); }} style={{ height: 46, borderRadius: 10, border: 'none', background: '#161618', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>View, save or share pass</button>
+              )}
               <button onClick={() => { setEditTarget(actionTarget); setActionTarget(null); }} style={{ height: 46, borderRadius: 10, border: '1px solid #e2e2de', background: '#fff', color: '#161618', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Edit guest</button>
               {actionTarget.item.email && !actionTarget.item.removed && (
                 <button onClick={() => { const target = actionTarget; setActionTarget(null); void handleSendOne(target); }} disabled={emailSending.has(actionTarget.item.id)} style={{ height: 46, borderRadius: 10, border: '1px solid #e2e2de', background: '#fff', color: '#161618', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
@@ -659,6 +671,15 @@ export default function ManagePage() {
           item={editTarget.item}
           onClose={() => setEditTarget(null)}
           onSaved={handleEditSaved}
+        />
+      )}
+
+      {postcardTarget && (
+        <QrPostcardSheet
+          eventName={session.name}
+          item={postcardTarget.item}
+          qrDataUrl={postcardTarget.dataUrl}
+          onClose={() => setPostcardTarget(null)}
         />
       )}
 
