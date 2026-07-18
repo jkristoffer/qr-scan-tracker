@@ -10,6 +10,8 @@ import { manageAccessStorageKey } from '@/lib/managePassword';
 import { db } from '@/lib/supabase';
 import { toQrDataUrl } from '@/lib/qr';
 import { nextTicketCode } from '@/lib/ticketCodes';
+import { renderTicketPassImage } from '@/lib/ticketPass';
+import { createZip } from '@/lib/zip';
 import { Item, ManageSession } from '@/lib/types';
 
 interface GuestCard {
@@ -20,6 +22,14 @@ interface GuestCard {
 type Tab = 'active' | 'removed';
 type TallyFilter = 'total' | 'checked_in' | 'pending';
 type AccessState = 'checking' | 'locked' | 'unlocked';
+
+function ticketImageFilename(item: Item, usedNames: Map<string, number>) {
+  const safePart = (value: string) => value.trim().normalize('NFKD').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0, 100) || 'guest';
+  const base = `${safePart(item.name)}${item.email ? `_${safePart(item.email)}` : ''}`;
+  const count = (usedNames.get(base) || 0) + 1;
+  usedNames.set(base, count);
+  return `${base}${count === 1 ? '' : `_${count}`}.jpg`;
+}
 
 function sortedActive(cards: GuestCard[], pinnedId?: string): GuestCard[] {
   return [...cards].sort((a, b) => {
@@ -65,6 +75,8 @@ export default function ManagePage() {
   const [activeScanners, setActiveScanners] = useState<string[]>([]);
   const [emailSending, setEmailSending] = useState<Set<string>>(new Set());
   const [emailSummary, setEmailSummary] = useState<string | null>(null);
+  const [bulkDownloadProgress, setBulkDownloadProgress] = useState<number | null>(null);
+  const [bulkDownloadError, setBulkDownloadError] = useState<string | null>(null);
 
   const toggleQr = (id: string) =>
     setExpandedQr(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
@@ -341,6 +353,34 @@ export default function ManagePage() {
     setTallyFilter(prev => (prev === f && f !== 'total') ? 'total' : f);
   };
 
+  const handleBulkDownload = async () => {
+    if (bulkDownloadProgress !== null || activeCards.length === 0) return;
+    setBulkDownloadProgress(0);
+    setBulkDownloadError(null);
+    try {
+      const usedNames = new Map<string, number>();
+      const entries: { name: string; data: Blob }[] = [];
+      for (const [index, card] of sortedActive(activeCards).entries()) {
+        const data = await renderTicketPassImage(session.name, card.item, card.dataUrl);
+        entries.push({ name: ticketImageFilename(card.item, usedNames), data });
+        setBulkDownloadProgress(index + 1);
+      }
+      const zip = await createZip(entries);
+      const url = URL.createObjectURL(zip);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'ticket-passes.zip';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setBulkDownloadError('Could not prepare the ticket images. Please try again.');
+    } finally {
+      setBulkDownloadProgress(null);
+    }
+  };
+
   return (
     <div style={{ minHeight: '100vh', background: '#fbfbfa', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", color: '#161618' }}>
 
@@ -432,6 +472,13 @@ export default function ManagePage() {
             >
               Send unsent
             </button>
+            <button
+              onClick={() => void handleBulkDownload()}
+              disabled={bulkDownloadProgress !== null || activeCards.length === 0}
+              style={{ flexShrink: 0, padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e2de', background: '#fff', color: bulkDownloadProgress !== null ? '#8a8a86' : '#161618', cursor: bulkDownloadProgress !== null ? 'default' : 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}
+            >
+              {bulkDownloadProgress === null ? 'Download passes' : `Preparing ${bulkDownloadProgress}/${activeCards.length}`}
+            </button>
             {emailSummary && (
               <div style={{ minWidth: 0, fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, color: '#7a7a76', letterSpacing: '0.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {emailSummary}
@@ -439,6 +486,7 @@ export default function ManagePage() {
             )}
           </div>
         )}
+        {bulkDownloadError && <div role="alert" style={{ marginTop: 8, fontSize: 12, color: '#b42318' }}>{bulkDownloadError}</div>}
         {actionMessage && (
           <div role="status" aria-live="polite" style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: '#f0f0ed', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#5a5a56' }}>
             {actionMessage}
