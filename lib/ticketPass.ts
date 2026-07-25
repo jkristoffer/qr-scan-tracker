@@ -43,14 +43,14 @@ function fittedTitle(
 ): { lines: string[]; size: number } {
   const words = text.trim().split(/\s+/);
   for (let size = 58; size >= 34; size -= 2) {
-    context.font = `700 ${size}px Georgia, "Times New Roman", serif`;
+    context.font = `700 ${size}px Arial, Helvetica, sans-serif`;
     if (context.measureText(text).width <= maxWidth) return { lines: [text], size };
     for (let split = 1; split < words.length; split += 1) {
       const lines = [words.slice(0, split).join(' '), words.slice(split).join(' ')];
       if (lines.every(line => context.measureText(line).width <= maxWidth)) return { lines, size };
     }
   }
-  context.font = '700 34px Georgia, "Times New Roman", serif';
+  context.font = '700 34px Arial, Helvetica, sans-serif';
   const midpoint = Math.max(1, Math.ceil(words.length / 2));
   return {
     lines: [
@@ -76,11 +76,11 @@ function drawEventDetail(
   context.fillText(label, x, y);
   context.fillStyle = DEEP_GREEN;
   const primarySize = fittedFontSize(context, primary, maxWidth, 26, 18);
-  context.font = `700 ${primarySize}px Georgia, "Times New Roman", serif`;
-  context.fillText(clippedText(context, primary, maxWidth), x, y + 43);
+  context.font = `700 ${primarySize}px Arial, Helvetica, sans-serif`;
+  context.fillText(clippedText(context, primary, maxWidth), x, y + 52);
   context.fillStyle = MUTED;
   context.font = '400 20px Arial, Helvetica, sans-serif';
-  context.fillText(clippedText(context, secondary, maxWidth), x, y + 78);
+  context.fillText(clippedText(context, secondary, maxWidth), x, y + 98);
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -140,12 +140,12 @@ export async function renderTicketPassImage(
   context.fillText('ENTRY PASS', 110, 92);
 
   const title = fittedTitle(context, eventName, 820);
-  context.font = `700 ${title.size}px Georgia, "Times New Roman", serif`;
+  context.font = `700 ${title.size}px Arial, Helvetica, sans-serif`;
   context.fillStyle = '#fffdf6';
   title.lines.forEach((line, index) => context.fillText(line, 110, 154 + index * (title.size + 7)));
 
   context.fillStyle = '#d8c697';
-  context.font = 'italic 23px Georgia, "Times New Roman", serif';
+  context.font = 'italic 23px Arial, Helvetica, sans-serif';
   context.fillText('Music for a Sustainable Future', 110, 256);
 
   context.fillStyle = GOLD;
@@ -154,7 +154,7 @@ export async function renderTicketPassImage(
   context.font = '700 17px Arial, Helvetica, sans-serif';
   context.fillText('PREPARED FOR', 110, 355);
   const guestFontSize = fittedFontSize(context, item.name, 860, 48, 32);
-  context.font = `700 ${guestFontSize}px Georgia, "Times New Roman", serif`;
+  context.font = `700 ${guestFontSize}px Arial, Helvetica, sans-serif`;
   context.fillStyle = DEEP_GREEN;
   context.fillText(clippedText(context, item.name, 860), 110, 408);
 
@@ -173,11 +173,11 @@ export async function renderTicketPassImage(
   context.strokeStyle = '#d8cdb8';
   context.lineWidth = 2;
   context.beginPath();
-  context.moveTo(110, 1118);
-  context.lineTo(970, 1118);
+  context.moveTo(110, 1108);
+  context.lineTo(970, 1108);
   context.stroke();
-  drawEventDetail(context, 'WHEN', 'Sunday, 2 August 2026', '4:00 PM–6:00 PM  ·  Registration 3:15 PM', 110, 1148, 405);
-  drawEventDetail(context, 'WHERE', 'National Museum of Singapore', 'Gallery Theatre', 550, 1148, 420);
+  drawEventDetail(context, 'WHEN', 'Sunday, 2 August 2026', '4:00 PM–6:00 PM  ·  Registration 3:15 PM', 110, 1128, 405);
+  drawEventDetail(context, 'WHERE', 'National Museum of Singapore', 'Gallery Theatre', 550, 1128, 420);
 
   context.drawImage(logoImage, 455, 1248, 170, 40);
 
