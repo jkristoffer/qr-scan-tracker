@@ -341,16 +341,23 @@ export async function migrate(options: MigrateOptions = {}) {
     await sql`
       create or replace function suggest_next_ticket_code(p_session_id uuid)
       returns text
-      language sql
-      stable
+      language plpgsql
+      volatile
       as $$
-        select 'TKT-' || lpad(next_value, greatest(4, length(next_value)), '0')
-        from (
-          select (coalesce(max(substring(code from 5)::numeric), 0) + 1)::text as next_value
+      declare
+        candidate text;
+      begin
+        loop
+          candidate := 'TKT-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 20));
+          exit when not exists (
+            select 1
           from ticket_code_registry
           where session_id = p_session_id
-            and code ~ '^TKT-[0-9]{4,}$'
-        ) next_code
+              and code = candidate
+          );
+        end loop;
+        return candidate;
+      end;
       $$
     `;
     if (!schema) {

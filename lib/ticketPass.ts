@@ -164,35 +164,22 @@ export async function renderTicketPassImage(
   roundedRect(context, 80, 440, 920, 660, 28);
   context.fill();
   context.stroke();
-  context.textAlign = 'center';
-  context.fillStyle = MID_GREEN;
-  context.font = '700 18px Arial, Helvetica, sans-serif';
-  context.fillText('SCAN AT CHECK-IN', WIDTH / 2, 482);
   context.fillStyle = '#ffffff';
-  roundedRect(context, 225, 500, 630, 580, 20);
+  roundedRect(context, 215, 455, 650, 630, 20);
   context.fill();
   context.imageSmoothingEnabled = false;
-  context.drawImage(qrImage, 245, 505, 590, 590);
+  context.drawImage(qrImage, 230, 460, 620, 620);
 
   context.strokeStyle = '#d8cdb8';
   context.lineWidth = 2;
   context.beginPath();
-  context.moveTo(110, 1128);
-  context.lineTo(970, 1128);
+  context.moveTo(110, 1118);
+  context.lineTo(970, 1118);
   context.stroke();
-  drawEventDetail(context, 'WHEN', 'Sunday, 2 August 2026', '4:00 PM–6:00 PM  ·  Registration 3:15 PM', 110, 1160, 405);
-  drawEventDetail(context, 'WHERE', 'National Museum of Singapore', 'Gallery Theatre', 550, 1160, 420);
+  drawEventDetail(context, 'WHEN', 'Sunday, 2 August 2026', '4:00 PM–6:00 PM  ·  Registration 3:15 PM', 110, 1148, 405);
+  drawEventDetail(context, 'WHERE', 'National Museum of Singapore', 'Gallery Theatre', 550, 1148, 420);
 
-  context.textAlign = 'left';
-  context.fillStyle = GOLD;
-  context.font = '700 14px Arial, Helvetica, sans-serif';
-  context.fillText('TICKET CODE', 110, 1292);
-  const barcodeFontSize = fittedFontSize(context, item.barcode, 270, 20, 16);
-  context.textAlign = 'right';
-  context.font = `700 ${barcodeFontSize}px "Courier New", Courier, monospace`;
-  context.fillStyle = DEEP_GREEN;
-  context.fillText(clippedText(context, item.barcode, 270), 970, 1292);
-  context.drawImage(logoImage, 455, 1266, 170, 40);
+  context.drawImage(logoImage, 455, 1248, 170, 40);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(

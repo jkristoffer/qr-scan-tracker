@@ -9,7 +9,7 @@ import { QrPostcardSheet } from '@/components/QrPostcardSheet';
 import { manageAccessStorageKey } from '@/lib/managePassword';
 import { db } from '@/lib/supabase';
 import { toQrDataUrl } from '@/lib/qr';
-import { nextTicketCode } from '@/lib/ticketCodes';
+import { generateTicketCode } from '@/lib/ticketCodes';
 import { renderTicketPassImage } from '@/lib/ticketPass';
 import { createZip } from '@/lib/zip';
 import { Item, ManageSession } from '@/lib/types';
@@ -167,7 +167,7 @@ export default function ManagePage() {
     if (!name || adding) return;
     setAdding(true);
     try {
-      const barcode = nextTicketCode(cards.map(c => c.item.barcode));
+      const barcode = generateTicketCode(cards.map(c => c.item.barcode));
       const item = await db.addItem(sessionId, name, barcode, addEmail.trim() || null);
       const dataUrl = await toQrDataUrl(barcode);
       setCards(prev => [...prev, { item, dataUrl }]);

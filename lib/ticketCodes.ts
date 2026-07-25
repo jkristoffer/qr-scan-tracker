@@ -1,21 +1,33 @@
-const TICKET_CODE_PATTERN = /^TKT-(\d+)$/;
+const TICKET_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+const TICKET_CODE_LENGTH = 16;
+const MAX_GENERATION_ATTEMPTS = 20;
 
-export function nextTicketCode(barcodes: Iterable<string>): string {
-  let max = 0;
+export function generateTicketCode(barcodes: Iterable<string> = []): string {
+  const usedCodes = new Set(barcodes);
 
-  for (const barcode of barcodes) {
-    const match = barcode.match(TICKET_CODE_PATTERN);
-    if (match) max = Math.max(max, Number.parseInt(match[1], 10));
+  for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt++) {
+    const randomBytes = new Uint8Array(TICKET_CODE_LENGTH);
+    globalThis.crypto.getRandomValues(randomBytes);
+    const suffix = Array.from(
+      randomBytes,
+      byte => TICKET_CODE_ALPHABET[byte & 31],
+    ).join('');
+    const code = `TKT-${suffix}`;
+    if (!usedCodes.has(code)) return code;
   }
 
-  return formatTicketCode(max + 1);
+  throw new Error('Could not generate a unique ticket code');
 }
 
 export function allocateTicketCodes(barcodes: Iterable<string>, count: number): string[] {
-  const firstNumber = Number.parseInt(nextTicketCode(barcodes).slice(4), 10);
-  return Array.from({ length: count }, (_, index) => formatTicketCode(firstNumber + index));
-}
+  const usedCodes = new Set(barcodes);
+  const codes: string[] = [];
 
-function formatTicketCode(value: number): string {
-  return `TKT-${String(value).padStart(4, '0')}`;
+  while (codes.length < count) {
+    const code = generateTicketCode(usedCodes);
+    usedCodes.add(code);
+    codes.push(code);
+  }
+
+  return codes;
 }
