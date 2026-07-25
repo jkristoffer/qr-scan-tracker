@@ -120,7 +120,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error('Could not load QR code image'));
+    image.onerror = () => reject(new Error(`Could not load ticket image asset: ${src}`));
     image.src = src;
   });
 }
@@ -132,7 +132,10 @@ export async function renderTicketPassImage(
   qrDataUrl: string,
   format: 'image/jpeg' | 'image/png' = 'image/jpeg',
 ): Promise<Blob> {
-  const qrImage = await loadImage(qrDataUrl);
+  const [qrImage, logoImage] = await Promise.all([
+    loadImage(qrDataUrl),
+    loadImage('/asez-wao-logo.svg'),
+  ]);
   const canvas = document.createElement('canvas');
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
@@ -165,9 +168,13 @@ export async function renderTicketPassImage(
 
   context.textBaseline = 'alphabetic';
   context.textAlign = 'left';
+  context.fillStyle = '#fffdf6';
+  roundedRect(context, 105, 67, 250, 66, 14);
+  context.fill();
+  context.drawImage(logoImage, 125, 76, 210, 49);
   context.fillStyle = '#d8c697';
-  context.font = '700 19px Arial, Helvetica, sans-serif';
-  context.fillText('ASEZ WAO  ·  ENTRY PASS', 110, 102);
+  context.font = '700 16px Arial, Helvetica, sans-serif';
+  context.fillText('ENTRY PASS', 380, 108);
 
   const title = fittedTitle(context, eventName, 760);
   context.font = `700 ${title.size}px Georgia, "Times New Roman", serif`;
@@ -210,6 +217,11 @@ export async function renderTicketPassImage(
   context.moveTo(110, 1065);
   context.lineTo(970, 1065);
   context.stroke();
+  context.save();
+  context.globalAlpha = 0.12;
+  drawLeafSprig(context, 1020, 1235, 0.62, Math.PI, MID_GREEN);
+  drawLeafSprig(context, 78, 1160, 0.48, 0.18, GOLD);
+  context.restore();
   drawEventDetail(context, 'WHEN', 'Sunday, 2 August 2026', '4:00 PM–6:00 PM  ·  Registration 3:15 PM', 110, 1105, 405);
   drawEventDetail(context, 'WHERE', 'National Museum of Singapore', 'Gallery Theatre', 550, 1105, 420);
 
