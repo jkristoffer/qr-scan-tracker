@@ -61,39 +61,6 @@ function fittedTitle(
   };
 }
 
-function drawLeafSprig(
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  scale: number,
-  rotation: number,
-  color: string,
-) {
-  context.save();
-  context.translate(x, y);
-  context.rotate(rotation);
-  context.scale(scale, scale);
-  context.strokeStyle = color;
-  context.fillStyle = color;
-  context.lineWidth = 3;
-  context.beginPath();
-  context.moveTo(0, 0);
-  context.quadraticCurveTo(50, -14, 112, -92);
-  context.stroke();
-  for (let index = 0; index < 5; index += 1) {
-    const leafX = 24 + index * 18;
-    const leafY = -18 - index * 15;
-    context.save();
-    context.translate(leafX, leafY);
-    context.rotate(index % 2 === 0 ? -0.55 : 0.65);
-    context.beginPath();
-    context.ellipse(0, 0, 9, 22, 0, 0, Math.PI * 2);
-    context.fill();
-    context.restore();
-  }
-  context.restore();
-}
-
 function drawEventDetail(
   context: CanvasRenderingContext2D,
   label: string,
@@ -132,9 +99,10 @@ export async function renderTicketPassImage(
   qrDataUrl: string,
   format: 'image/jpeg' | 'image/png' = 'image/jpeg',
 ): Promise<Blob> {
-  const [qrImage, logoImage] = await Promise.all([
+  const [qrImage, logoImage, botanicalImage] = await Promise.all([
     loadImage(qrDataUrl),
     loadImage('/asez-wao-logo.svg'),
+    loadImage('/botanical-ornament.png'),
   ]);
   const canvas = document.createElement('canvas');
   canvas.width = WIDTH;
@@ -159,83 +127,72 @@ export async function renderTicketPassImage(
   context.fillStyle = IVORY;
   context.fillRect(45, 35, 990, 1280);
   context.fillStyle = DEEP_GREEN;
-  context.fillRect(45, 35, 990, 320);
-  context.globalAlpha = 0.22;
-  drawLeafSprig(context, 905, 300, 1.35, Math.PI, '#d8c697');
-  drawLeafSprig(context, 970, 175, 1.05, 2.35, '#d8c697');
+  context.fillRect(45, 35, 990, 250);
+  context.globalAlpha = 0.28;
+  context.drawImage(botanicalImage, 625, 62, 340, 92);
   context.globalAlpha = 1;
   context.restore();
 
   context.textBaseline = 'alphabetic';
   context.textAlign = 'left';
-  context.fillStyle = '#fffdf6';
-  roundedRect(context, 105, 67, 250, 66, 14);
-  context.fill();
-  context.drawImage(logoImage, 125, 76, 210, 49);
   context.fillStyle = '#d8c697';
-  context.font = '700 16px Arial, Helvetica, sans-serif';
-  context.fillText('ENTRY PASS', 380, 108);
+  context.font = '700 18px Arial, Helvetica, sans-serif';
+  context.fillText('ENTRY PASS', 110, 92);
 
-  const title = fittedTitle(context, eventName, 760);
+  const title = fittedTitle(context, eventName, 820);
   context.font = `700 ${title.size}px Georgia, "Times New Roman", serif`;
   context.fillStyle = '#fffdf6';
-  title.lines.forEach((line, index) => context.fillText(line, 110, 175 + index * (title.size + 8)));
+  title.lines.forEach((line, index) => context.fillText(line, 110, 154 + index * (title.size + 7)));
 
   context.fillStyle = '#d8c697';
-  context.font = 'italic 25px Georgia, "Times New Roman", serif';
-  context.fillText('Music for a Sustainable Future', 110, 294);
+  context.font = 'italic 23px Georgia, "Times New Roman", serif';
+  context.fillText('Music for a Sustainable Future', 110, 256);
 
   context.fillStyle = GOLD;
-  context.fillRect(110, 385, 52, 3);
+  context.fillRect(110, 315, 52, 3);
   context.fillStyle = MID_GREEN;
   context.font = '700 17px Arial, Helvetica, sans-serif';
-  context.fillText('PREPARED FOR', 110, 430);
+  context.fillText('PREPARED FOR', 110, 355);
   const guestFontSize = fittedFontSize(context, item.name, 860, 48, 32);
   context.font = `700 ${guestFontSize}px Georgia, "Times New Roman", serif`;
   context.fillStyle = DEEP_GREEN;
-  context.fillText(clippedText(context, item.name, 860), 110, 490);
+  context.fillText(clippedText(context, item.name, 860), 110, 408);
 
   context.fillStyle = '#fffdf7';
   context.strokeStyle = '#d9cfbb';
   context.lineWidth = 2;
-  roundedRect(context, 280, 525, 520, 490, 26);
+  roundedRect(context, 80, 440, 920, 660, 28);
   context.fill();
   context.stroke();
   context.textAlign = 'center';
   context.fillStyle = MID_GREEN;
   context.font = '700 18px Arial, Helvetica, sans-serif';
-  context.fillText('SCAN AT CHECK-IN', WIDTH / 2, 573);
+  context.fillText('SCAN AT CHECK-IN', WIDTH / 2, 482);
   context.fillStyle = '#ffffff';
-  roundedRect(context, 337, 602, 406, 370, 18);
+  roundedRect(context, 225, 500, 630, 580, 20);
   context.fill();
   context.imageSmoothingEnabled = false;
-  context.drawImage(qrImage, 355, 607, 370, 370);
+  context.drawImage(qrImage, 245, 505, 590, 590);
 
   context.strokeStyle = '#d8cdb8';
   context.lineWidth = 2;
   context.beginPath();
-  context.moveTo(110, 1065);
-  context.lineTo(970, 1065);
+  context.moveTo(110, 1128);
+  context.lineTo(970, 1128);
   context.stroke();
-  context.save();
-  context.globalAlpha = 0.12;
-  drawLeafSprig(context, 1020, 1235, 0.62, Math.PI, MID_GREEN);
-  drawLeafSprig(context, 78, 1160, 0.48, 0.18, GOLD);
-  context.restore();
-  drawEventDetail(context, 'WHEN', 'Sunday, 2 August 2026', '4:00 PM–6:00 PM  ·  Registration 3:15 PM', 110, 1105, 405);
-  drawEventDetail(context, 'WHERE', 'National Museum of Singapore', 'Gallery Theatre', 550, 1105, 420);
+  drawEventDetail(context, 'WHEN', 'Sunday, 2 August 2026', '4:00 PM–6:00 PM  ·  Registration 3:15 PM', 110, 1160, 405);
+  drawEventDetail(context, 'WHERE', 'National Museum of Singapore', 'Gallery Theatre', 550, 1160, 420);
 
-  context.fillStyle = DEEP_GREEN;
-  context.fillRect(45, 1245, 990, 70);
   context.textAlign = 'left';
-  context.fillStyle = '#d8c697';
-  context.font = '700 16px Arial, Helvetica, sans-serif';
-  context.fillText('TICKET CODE', 110, 1288);
-  const barcodeFontSize = fittedFontSize(context, item.barcode, 530, 24, 18);
+  context.fillStyle = GOLD;
+  context.font = '700 14px Arial, Helvetica, sans-serif';
+  context.fillText('TICKET CODE', 110, 1292);
+  const barcodeFontSize = fittedFontSize(context, item.barcode, 270, 20, 16);
   context.textAlign = 'right';
   context.font = `700 ${barcodeFontSize}px "Courier New", Courier, monospace`;
-  context.fillStyle = '#fffdf6';
-  context.fillText(clippedText(context, item.barcode, 530), 970, 1289);
+  context.fillStyle = DEEP_GREEN;
+  context.fillText(clippedText(context, item.barcode, 270), 970, 1292);
+  context.drawImage(logoImage, 455, 1266, 170, 40);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
