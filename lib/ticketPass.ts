@@ -83,6 +83,55 @@ function drawEventDetail(
   context.fillText(clippedText(context, secondary, maxWidth), x, y + 98);
 }
 
+function drawGoldenCornerRibbon(context: CanvasRenderingContext2D) {
+  context.save();
+  roundedRect(context, 45, 35, 990, 1280, 40);
+  context.clip();
+
+  context.save();
+  context.shadowColor = 'rgba(24, 18, 5, 0.32)';
+  context.shadowBlur = 18;
+  context.shadowOffsetX = -5;
+  context.shadowOffsetY = 7;
+  const ribbonGradient = context.createLinearGradient(790, 35, 1035, 280);
+  ribbonGradient.addColorStop(0, '#93631a');
+  ribbonGradient.addColorStop(0.22, '#e5b944');
+  ribbonGradient.addColorStop(0.5, '#ffe59a');
+  ribbonGradient.addColorStop(0.76, '#d29a2f');
+  ribbonGradient.addColorStop(1, '#7d5013');
+  context.fillStyle = ribbonGradient;
+  context.beginPath();
+  context.moveTo(770, 35);
+  context.lineTo(875, 35);
+  context.lineTo(1035, 195);
+  context.lineTo(1035, 300);
+  context.closePath();
+  context.fill();
+  context.restore();
+
+  context.strokeStyle = 'rgba(255, 240, 174, 0.9)';
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(782, 39);
+  context.lineTo(1031, 288);
+  context.stroke();
+
+  context.strokeStyle = 'rgba(106, 68, 13, 0.65)';
+  context.lineWidth = 4;
+  context.beginPath();
+  context.moveTo(866, 39);
+  context.lineTo(1031, 204);
+  context.stroke();
+
+  context.strokeStyle = 'rgba(255, 250, 218, 0.55)';
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(817, 39);
+  context.lineTo(1031, 253);
+  context.stroke();
+  context.restore();
+}
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -152,24 +201,9 @@ export async function renderTicketPassImage(
   context.fillStyle = '#d8c697';
   context.font = '700 18px Arial, Helvetica, sans-serif';
   context.fillText('ENTRY PASS', 110, 92);
-  if (item.isVIP) {
-    const badgeGradient = context.createLinearGradient(815, 65, 965, 109);
-    badgeGradient.addColorStop(0, '#f6d675');
-    badgeGradient.addColorStop(1, '#b0872d');
-    context.fillStyle = badgeGradient;
-    roundedRect(context, 815, 65, 150, 44, 22);
-    context.fill();
-    context.strokeStyle = '#fff0ad';
-    context.lineWidth = 2;
-    context.stroke();
-    context.fillStyle = '#fffdf5';
-    context.font = '800 16px Arial, Helvetica, sans-serif';
-    context.textAlign = 'center';
-    context.fillText('VIP GUEST', 890, 94);
-    context.textAlign = 'left';
-  }
+  if (item.isVIP) drawGoldenCornerRibbon(context);
 
-  const title = fittedTitle(context, eventName, 820);
+  const title = fittedTitle(context, eventName, item.isVIP ? 650 : 820);
   context.font = `700 ${title.size}px Arial, Helvetica, sans-serif`;
   context.fillStyle = '#fffdf6';
   title.lines.forEach((line, index) => context.fillText(line, 110, 154 + index * (title.size + 7)));
@@ -191,21 +225,15 @@ export async function renderTicketPassImage(
   context.fillStyle = '#fffdf7';
   context.strokeStyle = '#d9cfbb';
   context.lineWidth = 2;
-  roundedRect(context, 80, 440, 920, 660, 28);
+  roundedRect(context, 80, 440, 920, 645, 28);
   context.fill();
   context.stroke();
   context.fillStyle = '#ffffff';
-  roundedRect(context, 215, 455, 650, 630, 20);
+  roundedRect(context, 215, 445, 650, 630, 20);
   context.fill();
   context.imageSmoothingEnabled = false;
-  context.drawImage(qrImage, 230, 460, 620, 620);
+  context.drawImage(qrImage, 230, 450, 620, 620);
 
-  context.strokeStyle = '#d8cdb8';
-  context.lineWidth = 2;
-  context.beginPath();
-  context.moveTo(110, 1108);
-  context.lineTo(970, 1108);
-  context.stroke();
   drawEventDetail(context, 'WHEN', 'Sunday, 2 August 2026', '4:00 PM–6:00 PM  ·  Registration 3:15 PM', 110, 1128, 405);
   drawEventDetail(context, 'WHERE', 'National Museum of Singapore', 'Gallery Theatre', 550, 1128, 420);
 
