@@ -24,6 +24,7 @@
     "react-email": "^6.6.9",
     "resend": "^6.17.2",
     "typescript": "^6.0.3",
+    "vercel": "^56.2.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

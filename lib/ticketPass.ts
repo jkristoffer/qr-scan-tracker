@@ -179,7 +179,14 @@ export async function renderTicketPassImage(
   context.clip();
   context.fillStyle = cardFill;
   context.fillRect(45, 35, 990, 1280);
-  context.fillStyle = DEEP_GREEN;
+  if (item.isVIP) {
+    const vipHeaderGradient = context.createLinearGradient(230, -150, 850, 470);
+    vipHeaderGradient.addColorStop(0, '#4A1F2D');
+    vipHeaderGradient.addColorStop(1, '#7A3548');
+    context.fillStyle = vipHeaderGradient;
+  } else {
+    context.fillStyle = DEEP_GREEN;
+  }
   context.fillRect(45, 35, 990, 250);
   context.globalAlpha = 0.28;
   context.drawImage(botanicalImage, 625, 62, 340, 92);
