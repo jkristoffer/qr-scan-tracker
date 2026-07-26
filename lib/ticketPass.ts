@@ -109,6 +109,10 @@ export async function renderTicketPassImage(
   canvas.height = HEIGHT;
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Image rendering is unavailable');
+  const cardFill = context.createLinearGradient(45, 35, 1035, 1315);
+  cardFill.addColorStop(0, item.isVIP ? '#fffdf5' : IVORY);
+  cardFill.addColorStop(0.55, item.isVIP ? '#fbe8aa' : IVORY);
+  cardFill.addColorStop(1, item.isVIP ? '#ebcf7a' : IVORY);
 
   context.fillStyle = '#e8e1d2';
   context.fillRect(0, 0, WIDTH, HEIGHT);
@@ -116,7 +120,7 @@ export async function renderTicketPassImage(
   context.shadowColor = 'rgba(40, 48, 38, 0.15)';
   context.shadowBlur = 28;
   context.shadowOffsetY = 12;
-  context.fillStyle = IVORY;
+  context.fillStyle = cardFill;
   roundedRect(context, 45, 35, 990, 1280, 40);
   context.fill();
   context.restore();
@@ -124,7 +128,7 @@ export async function renderTicketPassImage(
   context.save();
   roundedRect(context, 45, 35, 990, 1280, 40);
   context.clip();
-  context.fillStyle = IVORY;
+  context.fillStyle = cardFill;
   context.fillRect(45, 35, 990, 1280);
   context.fillStyle = DEEP_GREEN;
   context.fillRect(45, 35, 990, 250);
@@ -132,12 +136,38 @@ export async function renderTicketPassImage(
   context.drawImage(botanicalImage, 625, 62, 340, 92);
   context.globalAlpha = 1;
   context.restore();
+  if (item.isVIP) {
+    const borderGradient = context.createLinearGradient(45, 35, 1035, 1315);
+    borderGradient.addColorStop(0, '#fff7dc');
+    borderGradient.addColorStop(0.4, '#eee4c9');
+    borderGradient.addColorStop(1, '#e2d4ae');
+    context.strokeStyle = borderGradient;
+    context.lineWidth = 10;
+    roundedRect(context, 52, 42, 976, 1266, 34);
+    context.stroke();
+  }
 
   context.textBaseline = 'alphabetic';
   context.textAlign = 'left';
   context.fillStyle = '#d8c697';
   context.font = '700 18px Arial, Helvetica, sans-serif';
   context.fillText('ENTRY PASS', 110, 92);
+  if (item.isVIP) {
+    const badgeGradient = context.createLinearGradient(815, 65, 965, 109);
+    badgeGradient.addColorStop(0, '#f6d675');
+    badgeGradient.addColorStop(1, '#b0872d');
+    context.fillStyle = badgeGradient;
+    roundedRect(context, 815, 65, 150, 44, 22);
+    context.fill();
+    context.strokeStyle = '#fff0ad';
+    context.lineWidth = 2;
+    context.stroke();
+    context.fillStyle = '#fffdf5';
+    context.font = '800 16px Arial, Helvetica, sans-serif';
+    context.textAlign = 'center';
+    context.fillText('VIP GUEST', 890, 94);
+    context.textAlign = 'left';
+  }
 
   const title = fittedTitle(context, eventName, 820);
   context.font = `700 ${title.size}px Arial, Helvetica, sans-serif`;
@@ -167,11 +197,6 @@ export async function renderTicketPassImage(
   context.fillStyle = '#ffffff';
   roundedRect(context, 215, 455, 650, 630, 20);
   context.fill();
-  if (item.isVIP) {
-    context.strokeStyle = GOLD;
-    context.lineWidth = 8;
-    context.stroke();
-  }
   context.imageSmoothingEnabled = false;
   context.drawImage(qrImage, 230, 460, 620, 620);
 

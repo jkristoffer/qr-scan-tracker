@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { db } from '@/lib/supabase';
 import { toQrDataUrl } from '@/lib/qr';
 import { Item } from '@/lib/types';
+import { VipToggle } from '@/components/VipToggle';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -139,10 +140,9 @@ export function GuestEditSheet({ sessionId, item, onClose, onSaved }: GuestEditS
         <label htmlFor="edit-guest-email" style={{ display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Email optional</label>
         <input id="edit-guest-email" type="email" value={email} onChange={event => setEmail(event.target.value)} disabled={saving} aria-invalid={Boolean(emailError)} aria-describedby="edit-email-error" style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${emailError ? 'oklch(0.62 0.18 32)' : '#dcdcd8'}`, background: '#fff', borderRadius: 10, padding: '11px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }} />
         <div id="edit-email-error" style={{ minHeight: 18, marginTop: 4, fontSize: 11, color: 'oklch(0.48 0.16 32)' }}>{emailError}</div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, width: 'fit-content', marginBottom: 12, fontSize: 13, fontWeight: 600, color: '#555550', cursor: saving ? 'default' : 'pointer' }}>
-          <input type="checkbox" checked={isVIP} onChange={event => setIsVIP(event.target.checked)} disabled={saving} />
-          VIP guest
-        </label>
+        <div style={{ marginBottom: 12 }}>
+          <VipToggle checked={isVIP} onChange={setIsVIP} disabled={saving} />
+        </div>
         <div style={{ background: '#f0f0ed', borderRadius: 10, padding: '10px 12px', marginTop: 3, fontSize: 12, color: '#5a5a56', lineHeight: 1.45 }}>
           Current ticket: <strong>{item.barcode}</strong>. Saving a correction marks the pass unsent; it is not emailed automatically.
         </div>

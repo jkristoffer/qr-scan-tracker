@@ -44,14 +44,14 @@ export function QrTicketEmail({
               Your entry pass is ready. Present the QR code below when you arrive at check-in.
             </Text>
 
-            <Section style={ticket}>
+            <Section style={{ ...ticket, ...(isVIP ? vipTicket : {}) }}>
               <Text style={ticketLabel}>SCAN AT CHECK-IN</Text>
               <Img
                 src={`cid:${contentId}`}
                 alt={`QR entry pass for ${guestName}`}
                 width="260"
                 height="260"
-                style={{ ...qrCode, ...(isVIP ? vipQrCode : {}) }}
+                style={qrCode}
               />
               <Text style={codeLabel}>TICKET CODE</Text>
               <Text style={code}>{barcode}</Text>
@@ -180,9 +180,11 @@ const qrCode = {
   borderRadius: '10px',
 };
 
-const vipQrCode = {
-  border: '10px solid #c6a24a',
-  boxShadow: '0 0 0 4px #fff8df',
+const vipTicket = {
+  backgroundColor: '#fff2c4',
+  backgroundImage: 'linear-gradient(135deg, #fffef9 0%, #fff2c4 54%, #ebcf7a 100%)',
+  border: '2px solid #eee4c9',
+  boxShadow: '0 9px 24px rgba(128, 96, 30, 0.14)',
 };
 
 const codeLabel = {

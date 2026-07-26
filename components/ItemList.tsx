@@ -53,9 +53,12 @@ export function ItemList({ onManualCheckIn, pendingItemId, failedItemId, admissi
               display: 'flex', alignItems: 'center', gap: 13,
               padding: '16px 16px',
               background: isFlash ? 'color-mix(in oklch, oklch(0.74 0.17 152) 14%, white)' : '#ffffff',
-              border: `1px solid ${isFlash ? 'oklch(0.74 0.17 152)' : '#ededea'}`,
+              border: item.isVIP
+                ? '1px solid #eee4c9'
+                : `1px solid ${isFlash ? 'oklch(0.74 0.17 152)' : '#ededea'}`,
+              boxShadow: 'none',
               borderRadius: 14, marginBottom: 8,
-              transition: 'background 0.4s, border-color 0.4s',
+              transition: 'background 0.4s, border-color 0.4s, box-shadow 0.4s',
             }}
           >
             {/* Avatar */}
@@ -76,7 +79,7 @@ export function ItemList({ onManualCheckIn, pendingItemId, failedItemId, admissi
                 <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {item.name}
                 </div>
-                {item.isVIP && <span style={{ flexShrink: 0, border: '1px solid #b68b2f', background: '#fff8df', color: '#755710', borderRadius: 999, padding: '2px 6px', fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 700, letterSpacing: '0.1em' }}>VIP</span>}
+                {item.isVIP && <span style={{ flexShrink: 0, border: '1px solid #f7e5ae', background: 'linear-gradient(135deg, #9b741c 0%, #d8b853 100%)', color: '#fffdf5', borderRadius: 999, padding: '3px 8px', fontFamily: "'JetBrains Mono', monospace", fontSize: 8.5, fontWeight: 800, letterSpacing: '0.12em' }}>VIP</span>}
               </div>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#9a9a96', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {isIn

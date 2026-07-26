@@ -7,12 +7,37 @@ import { ManageSession } from '@/lib/types';
 
 interface ManageSecuritySheetProps {
   session: ManageSession;
+  guestView: 'active' | 'removed';
+  activeGuestCount: number;
+  removedGuestCount: number;
+  onGuestViewChange: (view: 'active' | 'removed') => void;
+  onSendUnsent: () => void;
+  sendingUnsent: boolean;
+  emailSummary: string | null;
+  onDownloadPasses: () => void;
+  downloadProgress: number | null;
+  downloadError: string | null;
   onClose: () => void;
   onLock: () => void;
   onSessionChange: (session: ManageSession) => void;
 }
 
-export function ManageSecuritySheet({ session, onClose, onLock, onSessionChange }: ManageSecuritySheetProps) {
+export function ManageSecuritySheet({
+  session,
+  guestView,
+  activeGuestCount,
+  removedGuestCount,
+  onGuestViewChange,
+  onSendUnsent,
+  sendingUnsent,
+  emailSummary,
+  onDownloadPasses,
+  downloadProgress,
+  downloadError,
+  onClose,
+  onLock,
+  onSessionChange,
+}: ManageSecuritySheetProps) {
   const [nameDraft, setNameDraft] = useState(session.name);
   const [renaming, setRenaming] = useState(false);
   const [renameMessage, setRenameMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
@@ -111,6 +136,66 @@ export function ManageSecuritySheet({ session, onClose, onLock, onSessionChange 
         </div>
         {!nameDraft.trim() && <div style={{ color: '#b42318', fontSize: 12, marginTop: 7 }}>Event name is required.</div>}
         {renameMessage && <div role="status" style={{ color: renameMessage.type === 'error' ? '#b42318' : 'oklch(0.45 0.14 152)', fontSize: 12.5, marginTop: 9 }}>{renameMessage.text}</div>}
+
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '22px 0 8px' }}>GUEST LIST VIEW</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {([
+            { view: 'active' as const, label: 'Active guests', count: activeGuestCount },
+            { view: 'removed' as const, label: 'Removed guests', count: removedGuestCount },
+          ]).map(option => {
+            const active = guestView === option.view;
+            return (
+              <button
+                key={option.view}
+                type="button"
+                onClick={() => onGuestViewChange(option.view)}
+                aria-pressed={active}
+                style={{
+                  minHeight: 58, borderRadius: 10, padding: '9px 11px', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
+                  border: `1px solid ${active ? '#161618' : '#dcdcd8'}`,
+                  background: active ? '#161618' : '#fff',
+                  color: active ? '#fff' : '#161618',
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{option.label}</div>
+                <div style={{ marginTop: 3, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: active ? '#bdbdb8' : '#8a8a86' }}>{option.count} GUESTS</div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '22px 0 8px' }}>TICKET DELIVERY</div>
+        <div style={{ border: '1px solid #e2e2de', borderRadius: 12, background: '#fff', padding: 13 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Send unsent tickets</div>
+          <div style={{ marginTop: 4, color: '#777773', fontSize: 12.5, lineHeight: 1.45 }}>
+            Emails a QR ticket to every active guest with an email address who has not received one yet.
+          </div>
+          <button
+            type="button"
+            onClick={onSendUnsent}
+            disabled={sendingUnsent}
+            style={{ width: '100%', height: 42, marginTop: 11, border: 'none', borderRadius: 9, background: sendingUnsent ? '#d8d8d4' : '#161618', color: sendingUnsent ? '#8a8a86' : '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: sendingUnsent ? 'default' : 'pointer' }}
+          >
+            {sendingUnsent ? 'Sending…' : 'Send unsent'}
+          </button>
+          {emailSummary && <div role="status" style={{ marginTop: 8, fontSize: 12, color: '#686864', lineHeight: 1.4 }}>{emailSummary}</div>}
+        </div>
+
+        <div style={{ border: '1px solid #e2e2de', borderRadius: 12, background: '#fff', padding: 13, marginTop: 9 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Download passes</div>
+          <div style={{ marginTop: 4, color: '#777773', fontSize: 12.5, lineHeight: 1.45 }}>
+            Creates a ZIP of ready-to-share QR ticket images for every active guest.
+          </div>
+          <button
+            type="button"
+            onClick={onDownloadPasses}
+            disabled={downloadProgress !== null || activeGuestCount === 0}
+            style={{ width: '100%', height: 42, marginTop: 11, border: '1px solid #d7d7d3', borderRadius: 9, background: '#fff', color: downloadProgress !== null || activeGuestCount === 0 ? '#a0a09b' : '#161618', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: downloadProgress !== null || activeGuestCount === 0 ? 'default' : 'pointer' }}
+          >
+            {downloadProgress === null ? 'Download passes' : `Preparing ${downloadProgress}/${activeGuestCount}`}
+          </button>
+          {downloadError && <div role="alert" style={{ marginTop: 8, fontSize: 12, color: '#b42318' }}>{downloadError}</div>}
+        </div>
 
         <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '22px 0 8px' }}>CHANGE MANAGE PIN</div>
         {[

@@ -6,6 +6,7 @@ import { db } from '@/lib/supabase';
 import { hashManagePin, isValidManagePin } from '@/lib/managePassword';
 import { allocateTicketCodes } from '@/lib/ticketCodes';
 import { ScanSession } from '@/lib/types';
+import { VipToggle } from '@/components/VipToggle';
 
 interface EventProgress { total: number; scanned: number; }
 
@@ -442,14 +443,12 @@ export function Dashboard() {
                         style={{ width: '100%', border: `1px solid ${errors?.email ? '#d92d20' : '#dcdcd8'}`, background: '#fff', borderRadius: 9, padding: '11px 12px', fontSize: 14.5, fontFamily: 'inherit', outline: 'none', marginTop: 8 }}
                       />
                       {errors?.email && <div style={{ color: '#b42318', fontSize: 11.5, marginTop: 5 }}>{errors.email}</div>}
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 13, fontWeight: 600, color: '#555550', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
+                      <div style={{ marginTop: 10 }}>
+                        <VipToggle
                           checked={guest.isVIP}
-                          onChange={e => updateManualGuest(guest.id, 'isVIP', e.target.checked)}
+                          onChange={checked => updateManualGuest(guest.id, 'isVIP', checked)}
                         />
-                        VIP guest
-                      </label>
+                      </div>
                     </div>
                   );
                 })}

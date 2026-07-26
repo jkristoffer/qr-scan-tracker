@@ -76,13 +76,13 @@ export default function QRCodesPage() {
         {cards.map(({ item, dataUrl }) => (
           <div
             key={item.id}
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', border: item.isVIP ? '2px solid #c6a24a' : '1px solid #e6e6e2', background: '#fff', borderRadius: 14, padding: '14px 10px 12px', pageBreakInside: 'avoid', breakInside: 'avoid' }}
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', border: item.isVIP ? '2px solid #eee4c9' : '1px solid #e6e6e2', background: item.isVIP ? 'linear-gradient(135deg, #fffef9 0%, #fff1bd 55%, #ebcf7a 100%)' : '#fff', boxShadow: item.isVIP ? '0 8px 22px rgba(128, 96, 30, 0.14)' : 'none', borderRadius: 14, padding: '14px 10px 12px', pageBreakInside: 'avoid', breakInside: 'avoid' }}
           >
-            <div style={{ padding: item.isVIP ? 5 : 0, border: item.isVIP ? '3px solid #c6a24a' : 'none', borderRadius: 10 }}>
+            <div style={{ padding: 5, borderRadius: 10, background: '#fff' }}>
               <img src={dataUrl} alt={item.barcode} style={{ width: 130, height: 130, display: 'block' }} />
             </div>
             <div style={{ marginTop: 9, fontSize: 13, fontWeight: 600, textAlign: 'center', lineHeight: 1.3, color: '#161618' }}>{item.name}</div>
-            {item.isVIP && <div style={{ marginTop: 4, color: '#755710', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, letterSpacing: '0.12em' }}>VIP</div>}
+            {item.isVIP && <div style={{ marginTop: 5, borderRadius: 999, padding: '3px 8px', background: 'linear-gradient(135deg, #9b741c 0%, #d8b853 100%)', color: '#fffdf5', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 800, letterSpacing: '0.14em' }}>VIP</div>}
             <div style={{ marginTop: 4, fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, color: '#9a9a96', textAlign: 'center', letterSpacing: '0.04em' }}>{item.barcode}</div>
           </div>
         ))}
