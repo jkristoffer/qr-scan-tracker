@@ -15,6 +15,8 @@ export interface Item {
   barcode: string;
   name: string;
   email: string | null;
+  isVIP: boolean;
+  created_at: string;
   scanned: boolean;
   scanned_at: string | null;
   scanned_by: string | null;
@@ -50,6 +52,7 @@ export interface UndoCheckInResult {
 export interface UpdateItemDetailsInput {
   name: string;
   email: string | null;
+  isVIP: boolean;
 }
 
 export type ReplaceTicketCodeStatus = 'replaced' | 'stale' | 'code_unavailable' | 'not_found';

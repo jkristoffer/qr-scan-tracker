@@ -153,6 +153,7 @@ export default function ScannerPage() {
         : result.type === 'duplicate'
           ? 'Entered earlier · This gate'
           : 'Code ' + (result.item?.barcode ?? '—'),
+      isVIP: result.item?.isVIP,
     });
   }, [setLastScan, updateItem, showFlood, startUndoWindow]);
 

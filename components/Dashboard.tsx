@@ -15,15 +15,17 @@ interface GuestInput {
   id: number;
   name: string;
   email: string;
+  isVIP: boolean;
 }
 
 interface GuestItem {
   barcode: string;
   name: string;
   email: string | null;
+  isVIP: boolean;
 }
 
-const EMPTY_UPLOAD_LABEL = { title: 'Upload guest list', sub: 'CSV barcode,name,email or TXT names' };
+const EMPTY_UPLOAD_LABEL = { title: 'Upload guest list', sub: 'CSV barcode,name,email,isVIP or TXT names' };
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function parseGuestRows(text: string): GuestItem[] {
@@ -33,12 +35,13 @@ function parseGuestRows(text: string): GuestItem[] {
     : lines;
 
   return dataLines.slice(0, 500).map(ln => {
-    const [barcodeRaw, nameRaw, emailRaw] = ln.split(',').map(s => s.trim());
+    const [barcodeRaw, nameRaw, emailRaw, vipRaw] = ln.split(',').map(s => s.trim());
     const barcode = barcodeRaw || ln;
     return {
       barcode,
       name: nameRaw || barcode,
       email: emailRaw || null,
+      isVIP: ['true', 'yes', '1', 'vip'].includes(vipRaw?.toLowerCase()),
     };
   }).filter(item => item.barcode);
 }
@@ -55,7 +58,7 @@ export function Dashboard() {
   const [uploadLabel, setUploadLabel] = useState<{ title: string; sub: string }>(EMPTY_UPLOAD_LABEL);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [uploadedGuests, setUploadedGuests] = useState<GuestItem[]>([]);
-  const [manualGuests, setManualGuests] = useState<GuestInput[]>([{ id: 1, name: '', email: '' }]);
+  const [manualGuests, setManualGuests] = useState<GuestInput[]>([{ id: 1, name: '', email: '', isVIP: false }]);
   const [creationError, setCreationError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [gateName, setGateName] = useState('');
@@ -144,17 +147,17 @@ export function Dashboard() {
   };
 
   const addManualGuest = () => {
-    setManualGuests(prev => [...prev, { id: nextManualGuestId.current++, name: '', email: '' }]);
+    setManualGuests(prev => [...prev, { id: nextManualGuestId.current++, name: '', email: '', isVIP: false }]);
   };
 
-  const updateManualGuest = (id: number, field: 'name' | 'email', value: string) => {
+  const updateManualGuest = (id: number, field: 'name' | 'email' | 'isVIP', value: string | boolean) => {
     setManualGuests(prev => prev.map(guest => guest.id === id ? { ...guest, [field]: value } : guest));
     setCreationError(null);
   };
 
   const removeManualGuest = (id: number) => {
     setManualGuests(prev => prev.length === 1
-      ? [{ ...prev[0], name: '', email: '' }]
+      ? [{ ...prev[0], name: '', email: '', isVIP: false }]
       : prev.filter(guest => guest.id !== id));
     setCreationError(null);
   };
@@ -167,6 +170,7 @@ export function Dashboard() {
       barcode: manualBarcodes[index],
       name: guest.name.trim(),
       email: guest.email.trim() || null,
+      isVIP: guest.isVIP,
     }));
 
     setCreating(true);
@@ -438,6 +442,14 @@ export function Dashboard() {
                         style={{ width: '100%', border: `1px solid ${errors?.email ? '#d92d20' : '#dcdcd8'}`, background: '#fff', borderRadius: 9, padding: '11px 12px', fontSize: 14.5, fontFamily: 'inherit', outline: 'none', marginTop: 8 }}
                       />
                       {errors?.email && <div style={{ color: '#b42318', fontSize: 11.5, marginTop: 5 }}>{errors.email}</div>}
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 13, fontWeight: 600, color: '#555550', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={guest.isVIP}
+                          onChange={e => updateManualGuest(guest.id, 'isVIP', e.target.checked)}
+                        />
+                        VIP guest
+                      </label>
                     </div>
                   );
                 })}

@@ -149,7 +149,7 @@ export const db = {
     return data;
   },
 
-  async createItems(items: { barcode: string; name: string; email?: string | null }[], sessionId: string) {
+  async createItems(items: { barcode: string; name: string; email?: string | null; isVIP?: boolean }[], sessionId: string) {
     const client = getClient();
     const BATCH_SIZE = 100;
     const results = [];
@@ -224,13 +224,14 @@ export const db = {
 
     const name = input.name.trim();
     const email = input.email?.trim() || null;
-    if (current.name === name && current.email === email) return current;
+    if (current.name === name && current.email === email && current.isVIP === input.isVIP) return current;
 
     const { data, error } = await getClient()
       .from('items')
       .update({
         name,
         email,
+        isVIP: input.isVIP,
         qr_email_sent_at: null,
         qr_email_resend_id: null,
         qr_email_last_error: null,
@@ -285,10 +286,10 @@ export const db = {
     return data;
   },
 
-  async addItem(sessionId: string, name: string, barcode: string, email?: string | null) {
+  async addItem(sessionId: string, name: string, barcode: string, email?: string | null, isVIP = false) {
     const { data, error } = await getClient()
       .from('items')
-      .insert({ session_id: sessionId, name, barcode, email: email || null, scanned: false })
+      .insert({ session_id: sessionId, name, barcode, email: email || null, isVIP, scanned: false })
       .select()
       .single();
     if (error) throw error;

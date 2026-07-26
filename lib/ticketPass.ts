@@ -167,6 +167,11 @@ export async function renderTicketPassImage(
   context.fillStyle = '#ffffff';
   roundedRect(context, 215, 455, 650, 630, 20);
   context.fill();
+  if (item.isVIP) {
+    context.strokeStyle = GOLD;
+    context.lineWidth = 8;
+    context.stroke();
+  }
   context.imageSmoothingEnabled = false;
   context.drawImage(qrImage, 230, 460, 620, 620);
 

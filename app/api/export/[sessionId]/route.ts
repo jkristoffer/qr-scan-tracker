@@ -20,13 +20,15 @@ export async function GET(
     const csvField = (v: string) =>
       v.includes(',') || v.includes('"') || v.includes('\n') ? `"${v.replace(/"/g, '""')}"` : v;
 
-    const header = 'barcode,name,email,scanned,scanned_at,scanned_by\n';
+    const header = 'barcode,name,email,isVIP,registered_at,scanned,scanned_at,scanned_by\n';
     const rows = items
       .map((item) =>
         [
           csvField(item.barcode),
           csvField(item.name),
           csvField(item.email || ''),
+          item.isVIP ? 'true' : 'false',
+          csvField(item.created_at),
           item.scanned ? 'true' : 'false',
           csvField(item.scanned_at || ''),
           csvField(item.scanned_by || ''),

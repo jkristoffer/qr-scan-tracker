@@ -17,6 +17,7 @@ interface GuestEditSheetProps {
 export function GuestEditSheet({ sessionId, item, onClose, onSaved }: GuestEditSheetProps) {
   const [name, setName] = useState(item.name);
   const [email, setEmail] = useState(item.email || '');
+  const [isVIP, setIsVIP] = useState(item.isVIP);
   const [saving, setSaving] = useState(false);
   const [writeError, setWriteError] = useState('');
   const [replacing, setReplacing] = useState(false);
@@ -28,7 +29,9 @@ export function GuestEditSheet({ sessionId, item, onClose, onSaved }: GuestEditS
   const trimmedEmail = email.trim();
   const nameError = trimmedName ? '' : 'Name is required.';
   const emailError = trimmedEmail && !EMAIL_PATTERN.test(trimmedEmail) ? 'Enter a valid email.' : '';
-  const detailsChanged = trimmedName !== item.name.trim() || trimmedEmail !== (item.email?.trim() || '');
+  const detailsChanged = trimmedName !== item.name.trim()
+    || trimmedEmail !== (item.email?.trim() || '')
+    || isVIP !== item.isVIP;
   const saveDisabled = saving || !detailsChanged || Boolean(nameError || emailError);
   const trimmedCode = replacementCode.trim();
   const codeError = !trimmedCode
@@ -59,6 +62,7 @@ export function GuestEditSheet({ sessionId, item, onClose, onSaved }: GuestEditS
       const updated = await db.updateItemDetails(sessionId, item.id, {
         name: trimmedName,
         email: trimmedEmail || null,
+        isVIP,
       });
       if (!updated) {
         setWriteError('Guest no longer exists. Reload Manage and try again.');
@@ -135,6 +139,10 @@ export function GuestEditSheet({ sessionId, item, onClose, onSaved }: GuestEditS
         <label htmlFor="edit-guest-email" style={{ display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Email optional</label>
         <input id="edit-guest-email" type="email" value={email} onChange={event => setEmail(event.target.value)} disabled={saving} aria-invalid={Boolean(emailError)} aria-describedby="edit-email-error" style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${emailError ? 'oklch(0.62 0.18 32)' : '#dcdcd8'}`, background: '#fff', borderRadius: 10, padding: '11px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }} />
         <div id="edit-email-error" style={{ minHeight: 18, marginTop: 4, fontSize: 11, color: 'oklch(0.48 0.16 32)' }}>{emailError}</div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, width: 'fit-content', marginBottom: 12, fontSize: 13, fontWeight: 600, color: '#555550', cursor: saving ? 'default' : 'pointer' }}>
+          <input type="checkbox" checked={isVIP} onChange={event => setIsVIP(event.target.checked)} disabled={saving} />
+          VIP guest
+        </label>
         <div style={{ background: '#f0f0ed', borderRadius: 10, padding: '10px 12px', marginTop: 3, fontSize: 12, color: '#5a5a56', lineHeight: 1.45 }}>
           Current ticket: <strong>{item.barcode}</strong>. Saving a correction marks the pass unsent; it is not emailed automatically.
         </div>

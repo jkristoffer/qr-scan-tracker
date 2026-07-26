@@ -40,6 +40,8 @@ export async function migrate(options: MigrateOptions = {}) {
         barcode text not null,
         name text not null,
         email text,
+        "isVIP" boolean not null default false,
+        created_at timestamptz not null default now(),
         scanned boolean default false,
         scanned_at timestamptz,
         scanned_by text,
@@ -50,6 +52,25 @@ export async function migrate(options: MigrateOptions = {}) {
       )
     `;
     await sql`alter table items add column if not exists email text`;
+    await sql`alter table items add column if not exists "isVIP" boolean not null default false`;
+    await sql`alter table items add column if not exists created_at timestamptz`;
+    await sql`
+      update items
+      set created_at = coalesce(items.created_at, scan_sessions.created_at, now())
+      from scan_sessions
+      where items.session_id = scan_sessions.id
+        and items.created_at is null
+    `;
+    await sql`update items set created_at = now() where created_at is null`;
+    await sql`
+      alter table items
+        alter column created_at set default now(),
+        alter column created_at set not null
+    `;
+    await sql`
+      create index if not exists idx_items_session_created_at
+      on items(session_id, created_at)
+    `;
     await sql`alter table items add column if not exists qr_email_sent_at timestamptz`;
     await sql`alter table items add column if not exists qr_email_resend_id text`;
     await sql`alter table items add column if not exists qr_email_last_error text`;

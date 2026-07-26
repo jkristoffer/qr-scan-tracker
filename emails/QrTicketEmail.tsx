@@ -16,6 +16,7 @@ export interface QrTicketEmailProps {
   guestName: string;
   barcode: string;
   contentId: string;
+  isVIP: boolean;
 }
 
 export function QrTicketEmail({
@@ -23,6 +24,7 @@ export function QrTicketEmail({
   guestName,
   barcode,
   contentId,
+  isVIP,
 }: QrTicketEmailProps) {
   return (
     <Html lang="en" dir="ltr">
@@ -31,7 +33,7 @@ export function QrTicketEmail({
       <Body style={body}>
         <Container style={shell}>
           <Section style={header}>
-            <Text style={eyebrow}>ENTRY PASS</Text>
+            <Text style={eyebrow}>{isVIP ? 'VIP ENTRY PASS' : 'ENTRY PASS'}</Text>
             <Heading style={eventHeading}>{eventName}</Heading>
             <Text style={preparedFor}>Prepared for {guestName}</Text>
           </Section>
@@ -49,7 +51,7 @@ export function QrTicketEmail({
                 alt={`QR entry pass for ${guestName}`}
                 width="260"
                 height="260"
-                style={qrCode}
+                style={{ ...qrCode, ...(isVIP ? vipQrCode : {}) }}
               />
               <Text style={codeLabel}>TICKET CODE</Text>
               <Text style={code}>{barcode}</Text>
@@ -176,6 +178,11 @@ const qrCode = {
   backgroundColor: '#ffffff',
   border: '10px solid #ffffff',
   borderRadius: '10px',
+};
+
+const vipQrCode = {
+  border: '10px solid #c6a24a',
+  boxShadow: '0 0 0 4px #fff8df',
 };
 
 const codeLabel = {

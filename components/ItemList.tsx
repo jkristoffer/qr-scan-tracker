@@ -72,8 +72,11 @@ export function ItemList({ onManualCheckIn, pendingItemId, failedItemId, admissi
 
             {/* Name + meta */}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {item.name}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {item.name}
+                </div>
+                {item.isVIP && <span style={{ flexShrink: 0, border: '1px solid #b68b2f', background: '#fff8df', color: '#755710', borderRadius: 999, padding: '2px 6px', fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 700, letterSpacing: '0.1em' }}>VIP</span>}
               </div>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#9a9a96', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {isIn

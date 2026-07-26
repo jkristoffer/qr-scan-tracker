@@ -21,6 +21,7 @@ interface GuestCard {
 
 type Tab = 'active' | 'removed';
 type TallyFilter = 'total' | 'checked_in' | 'pending';
+type RegistrationFilter = 'all' | 'today' | 'last_24_hours' | 'last_7_days';
 type AccessState = 'checking' | 'locked' | 'unlocked';
 
 function ticketImageFilename(item: Item, usedNames: Map<string, number>) {
@@ -48,6 +49,18 @@ function sortedRemoved(cards: GuestCard[], pinnedId?: string): GuestCard[] {
   });
 }
 
+function registeredWithin(item: Item, filter: RegistrationFilter, now = new Date()): boolean {
+  if (filter === 'all') return true;
+  const registeredAt = new Date(item.created_at).getTime();
+  if (!Number.isFinite(registeredAt)) return false;
+  if (filter === 'today') {
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    return registeredAt >= startOfToday;
+  }
+  const age = now.getTime() - registeredAt;
+  return age >= 0 && age <= (filter === 'last_24_hours' ? 24 : 24 * 7) * 60 * 60 * 1000;
+}
+
 export default function ManagePage() {
   const params = useParams();
   const sessionId = params.sessionId as string;
@@ -60,8 +73,10 @@ export default function ManagePage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('active');
   const [tallyFilter, setTallyFilter] = useState<TallyFilter>('total');
+  const [registrationFilter, setRegistrationFilter] = useState<RegistrationFilter>('all');
   const [addName, setAddName] = useState('');
   const [addEmail, setAddEmail] = useState('');
+  const [addIsVIP, setAddIsVIP] = useState(false);
   const [adding, setAdding] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<GuestCard | null>(null);
   const [actionTarget, setActionTarget] = useState<GuestCard | null>(null);
@@ -168,11 +183,12 @@ export default function ManagePage() {
     setAdding(true);
     try {
       const barcode = generateTicketCode(cards.map(c => c.item.barcode));
-      const item = await db.addItem(sessionId, name, barcode, addEmail.trim() || null);
+      const item = await db.addItem(sessionId, name, barcode, addEmail.trim() || null, addIsVIP);
       const dataUrl = await toQrDataUrl(barcode);
       setCards(prev => [...prev, { item, dataUrl }]);
       setAddName('');
       setAddEmail('');
+      setAddIsVIP(false);
       inputRef.current?.focus();
     } finally {
       setAdding(false);
@@ -346,8 +362,14 @@ export default function ManagePage() {
     ? activeCards.filter(c => !c.item.scanned)
     : activeCards;
 
-  const displayActive = sortedActive(filteredActive, pinnedId);
-  const displayRemoved = sortedRemoved(removedCards, pinnedId);
+  const displayActive = sortedActive(
+    filteredActive.filter(card => registeredWithin(card.item, registrationFilter)),
+    pinnedId,
+  );
+  const displayRemoved = sortedRemoved(
+    removedCards.filter(card => registeredWithin(card.item, registrationFilter)),
+    pinnedId,
+  );
 
   const handleTallyClick = (f: TallyFilter) => {
     setTallyFilter(prev => (prev === f && f !== 'total') ? 'total' : f);
@@ -440,7 +462,7 @@ export default function ManagePage() {
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+        <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
           {(['active', 'removed'] as Tab[]).map(t => (
             <button
               key={t}
@@ -456,6 +478,20 @@ export default function ManagePage() {
               {t === 'active' ? `Active (${totalActive})` : `Removed (${removedCards.length})`}
             </button>
           ))}
+          <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7, fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.08em', color: '#777773' }}>
+            REGISTERED
+            <select
+              value={registrationFilter}
+              onChange={event => setRegistrationFilter(event.target.value as RegistrationFilter)}
+              aria-label="Filter guests by registration time"
+              style={{ height: 32, border: '1px solid #dcdcd8', borderRadius: 8, background: '#fff', color: '#161618', padding: '0 8px', fontSize: 11, fontFamily: 'inherit' }}
+            >
+              <option value="all">Any time</option>
+              <option value="today">Today</option>
+              <option value="last_24_hours">Last 24 hours</option>
+              <option value="last_7_days">Last 7 days</option>
+            </select>
+          </label>
         </div>
         {tab === 'active' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
@@ -526,6 +562,10 @@ export default function ManagePage() {
               {adding ? '...' : 'Add'}
             </button>
           </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, width: 'fit-content', fontSize: 13, fontWeight: 600, color: '#555550', cursor: 'pointer' }}>
+            <input type="checkbox" checked={addIsVIP} onChange={event => setAddIsVIP(event.target.checked)} />
+            VIP guest
+          </label>
         </div>
       )}
 
@@ -533,7 +573,9 @@ export default function ManagePage() {
       {tab === 'active' && (
         <div className="no-print" style={{ padding: '10px 12px 40px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {displayActive.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '48px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#b4b4b0', letterSpacing: '0.1em' }}>NO GUESTS YET</div>
+            <div style={{ textAlign: 'center', padding: '48px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#b4b4b0', letterSpacing: '0.1em' }}>
+              {registrationFilter === 'all' ? 'NO GUESTS YET' : 'NO GUESTS IN THIS TIME RANGE'}
+            </div>
           )}
           {displayActive.map(card => {
             const qrOpen = expandedQr.has(card.item.id);
@@ -564,10 +606,16 @@ export default function ManagePage() {
                     ▦
                   </button>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.item.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.item.name}</div>
+                      {card.item.isVIP && <span style={{ flexShrink: 0, border: '1px solid #b68b2f', background: '#fff8df', color: '#755710', borderRadius: 999, padding: '2px 6px', fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 700, letterSpacing: '0.1em' }}>VIP</span>}
+                    </div>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#9a9a96', marginTop: 3, letterSpacing: '0.04em' }}>{card.item.barcode}</div>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: card.item.email ? '#6a6a66' : '#b4b4b0', marginTop: 3, letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {card.item.email || 'NO EMAIL'}
+                    </div>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#9a9a96', marginTop: 3, letterSpacing: '0.04em' }}>
+                      REGISTERED {new Date(card.item.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                     </div>
                     {card.item.scanned && (
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 5, background: 'oklch(0.95 0.05 152)', borderRadius: 6, padding: '3px 8px' }}>
@@ -609,7 +657,9 @@ export default function ManagePage() {
                 </div>
                 {qrOpen && (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, paddingTop: 12 }}>
-                    <img src={card.dataUrl} alt={card.item.barcode} style={{ width: 120, height: 120, borderRadius: 8 }} />
+                    <div style={{ padding: card.item.isVIP ? 5 : 0, border: card.item.isVIP ? '3px solid #c6a24a' : 'none', borderRadius: 12, background: '#fff' }}>
+                      <img src={card.dataUrl} alt={card.item.barcode} style={{ display: 'block', width: 120, height: 120, borderRadius: 8 }} />
+                    </div>
                     <button
                       type="button"
                       onClick={() => setPostcardTarget(card)}
@@ -629,7 +679,9 @@ export default function ManagePage() {
       {tab === 'removed' && (
         <div className="no-print" style={{ padding: '10px 12px 40px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {displayRemoved.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '48px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#b4b4b0', letterSpacing: '0.1em' }}>NO REMOVED GUESTS</div>
+            <div style={{ textAlign: 'center', padding: '48px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#b4b4b0', letterSpacing: '0.1em' }}>
+              {registrationFilter === 'all' ? 'NO REMOVED GUESTS' : 'NO REMOVED GUESTS IN THIS TIME RANGE'}
+            </div>
           )}
           {displayRemoved.map(card => (
             <div key={card.item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: card.item.id === pinnedId ? 'oklch(0.96 0.04 152)' : '#fff', border: `1px solid ${card.item.id === pinnedId ? 'oklch(0.82 0.1 152)' : '#ececea'}`, borderRadius: 14, padding: '12px 12px 12px 14px', opacity: card.item.id === pinnedId ? 1 : 0.7, transition: 'background 0.4s, border-color 0.4s' }}>
@@ -660,9 +712,12 @@ export default function ManagePage() {
         <div style={{ marginBottom: 16, fontSize: 18, fontWeight: 700 }}>{session?.name}</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 14 }}>
           {sortedActive(activeCards).map(({ item, dataUrl }) => (
-            <div key={item.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', border: '1px solid #e6e6e2', borderRadius: 14, padding: '14px 10px 12px', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
-              <img src={dataUrl} alt={item.barcode} style={{ width: 130, height: 130 }} />
+            <div key={item.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', border: item.isVIP ? '2px solid #c6a24a' : '1px solid #e6e6e2', borderRadius: 14, padding: '14px 10px 12px', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+              <div style={{ padding: item.isVIP ? 5 : 0, border: item.isVIP ? '3px solid #c6a24a' : 'none', borderRadius: 10 }}>
+                <img src={dataUrl} alt={item.barcode} style={{ display: 'block', width: 130, height: 130 }} />
+              </div>
               <div style={{ marginTop: 9, fontSize: 13, fontWeight: 600, textAlign: 'center', lineHeight: 1.3 }}>{item.name}</div>
+              {item.isVIP && <div style={{ marginTop: 4, color: '#755710', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, letterSpacing: '0.12em' }}>VIP</div>}
               <div style={{ marginTop: 4, fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, color: '#9a9a96', textAlign: 'center' }}>{item.barcode}</div>
             </div>
           ))}
