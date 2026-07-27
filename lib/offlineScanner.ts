@@ -46,6 +46,22 @@ export const offlineScanner = {
       tx.objectStore('snapshots').put(snapshot); tx.objectStore('queue').put(entry); return true;
     });
   },
+  // Peer messages use the same immutable admission record as local scans. This
+  // means a later server reconciliation remains idempotent and authoritative.
+  async applyPeerAdmission(entry: QueuedAdmission): Promise<'applied' | 'duplicate' | 'unprepared'> {
+    return transaction(['snapshots', 'queue'], 'readwrite', async tx => {
+      const queue = tx.objectStore('queue');
+      if (await request<QueuedAdmission | undefined>(queue.get(entry.attemptId))) return 'duplicate';
+      const snapshot = await request<PreparedScanner | undefined>(tx.objectStore('snapshots').get(entry.sessionId));
+      if (!snapshot) return 'unprepared';
+      const item = snapshot.items.find(candidate => candidate.id === entry.itemId);
+      if (!item || item.scanned) return 'duplicate';
+      item.scanned = true; item.scanned_at = entry.capturedAt; item.scanned_by = entry.gateName;
+      tx.objectStore('snapshots').put(snapshot);
+      queue.put(entry);
+      return 'applied';
+    });
+  },
   async pending(sessionId: string): Promise<QueuedAdmission[]> { return transaction(['queue'], 'readonly', tx => request(tx.objectStore('queue').index('sessionId').getAll(sessionId))); },
   async removeAttempt(attemptId: string) { await transaction(['queue'], 'readwrite', async tx => { tx.objectStore('queue').delete(attemptId); }); },
   async undoPending(sessionId: string, itemId: string): Promise<boolean> {

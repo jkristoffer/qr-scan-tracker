@@ -17,6 +17,8 @@ interface ManageSecuritySheetProps {
   onDownloadPasses: () => void;
   downloadProgress: number | null;
   downloadError: string | null;
+  onArchive: () => void;
+  archiving: boolean;
   onClose: () => void;
   onLock: () => void;
   onSessionChange: (session: ManageSession) => void;
@@ -34,6 +36,8 @@ export function ManageSecuritySheet({
   onDownloadPasses,
   downloadProgress,
   downloadError,
+  onArchive,
+  archiving,
   onClose,
   onLock,
   onSessionChange,
@@ -46,6 +50,7 @@ export function ManageSecuritySheet({
   const [confirmation, setConfirmation] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+  const [archiveConfirmationOpen, setArchiveConfirmationOpen] = useState(false);
   const nextPinValid = isValidManagePin(nextPin);
   const pinsMatch = nextPin === confirmation;
 
@@ -226,6 +231,37 @@ export function ManageSecuritySheet({
         >
           {saving ? 'Saving…' : 'Change PIN'}
         </button>
+
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '24px 0 8px' }}>EVENT ARCHIVE</div>
+        <div style={{ border: '1px solid #e2e2de', borderRadius: 12, background: '#fff', padding: 13 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Archive this event</div>
+          <div style={{ marginTop: 4, color: '#777773', fontSize: 12.5, lineHeight: 1.45 }}>
+            Removes it from the active events list. You can restore it later from Archived events.
+          </div>
+          {!archiveConfirmationOpen ? (
+            <button
+              type="button"
+              onClick={() => setArchiveConfirmationOpen(true)}
+              style={{ width: '100%', height: 42, marginTop: 11, border: '1px solid #d7d7d3', borderRadius: 9, background: '#fff', color: '#161618', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}
+            >
+              Archive event
+            </button>
+          ) : (
+            <div style={{ marginTop: 11 }}>
+              <div role="alert" style={{ color: '#b42318', fontSize: 12.5, lineHeight: 1.4 }}>
+                Archive {session.name}? It will no longer appear in Active events.
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                <button type="button" onClick={() => setArchiveConfirmationOpen(false)} disabled={archiving} style={{ flex: 1, height: 40, border: '1px solid #d7d7d3', borderRadius: 9, background: '#fff', color: '#161618', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: archiving ? 'default' : 'pointer' }}>
+                  Cancel
+                </button>
+                <button type="button" onClick={onArchive} disabled={archiving} style={{ flex: 1, height: 40, border: 'none', borderRadius: 9, background: archiving ? '#d8d8d4' : '#b42318', color: archiving ? '#8a8a86' : '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: archiving ? 'default' : 'pointer' }}>
+                  {archiving ? 'Archiving…' : 'Archive event'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         <button type="button" onClick={onLock} style={{ width: '100%', height: 46, border: '1px solid #d7d7d3', borderRadius: 10, background: '#fff', color: '#161618', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', marginTop: 24 }}>
           Lock Manage page

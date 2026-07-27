@@ -10,9 +10,10 @@ export async function reconcileAdmission(input: AdmissionInput): Promise<Admissi
 
 function result(item: Item, state: AdmissionSyncState, type: ScanResult['type'] = 'success', message = item.name): ScanResult { return { success: type === 'success', item, message, type, syncState: state }; }
 
-export async function admitKnownItem(item: Item, input: Omit<AdmissionInput, 'itemId' | 'attemptId' | 'capturedAt'>): Promise<ScanResult> {
+export async function admitKnownItem(item: Item, input: Omit<AdmissionInput, 'itemId' | 'attemptId' | 'capturedAt'>, onQueued?: (attempt: QueuedAdmission) => void): Promise<ScanResult> {
   const attempt: QueuedAdmission = { ...input, itemId: item.id, attemptId: uuid(), capturedAt: new Date().toISOString(), state: 'pending' };
   const queued = await offlineScanner.queueAdmission(attempt);
+  if (queued) onQueued?.(attempt);
   if (!queued) {
     if (!navigator.onLine) return item.scanned ? result(item, 'confirmed', 'duplicate', `Already checked in${item.scanned_by ? ` · ${item.scanned_by}` : ''}`) : { success: false, message: 'Prepare this event while connected before scanning offline.', type: 'not_found' };
     const synced = await reconcileAdmission(attempt);

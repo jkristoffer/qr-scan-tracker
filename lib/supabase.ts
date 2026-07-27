@@ -436,4 +436,12 @@ export const db = {
     channel.subscribe();
     return channel;
   },
+
+  joinPeerSignaling(sessionId: string, onSignal: (payload: unknown) => void) {
+    const channel = getClient().channel(`peer-sync:${sessionId}`, {
+      config: { broadcast: { self: false } },
+    });
+    channel.on('broadcast', { event: 'signal' }, ({ payload }) => onSignal(payload));
+    return channel;
+  },
 };

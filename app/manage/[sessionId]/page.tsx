@@ -125,6 +125,7 @@ export default function ManagePage() {
   const [emailSummary, setEmailSummary] = useState<string | null>(null);
   const [bulkDownloadProgress, setBulkDownloadProgress] = useState<number | null>(null);
   const [bulkDownloadError, setBulkDownloadError] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState(false);
 
   const toggleQr = (id: string) =>
     setExpandedQr(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
@@ -363,6 +364,17 @@ export default function ManagePage() {
     setAccessState('locked');
   };
 
+  const handleArchive = async () => {
+    if (!session || archiving) return;
+    setArchiving(true);
+    try {
+      await db.archiveSession(session.id);
+      router.push('/');
+    } finally {
+      setArchiving(false);
+    }
+  };
+
   const handleUnlock = () => {
     setLoadingData(true);
     setAccessState('unlocked');
@@ -562,7 +574,6 @@ export default function ManagePage() {
             const checkinTime = card.item.scanned_at
               ? new Date(card.item.scanned_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
               : null;
-            const emailBusy = emailSending.has(card.item.id);
             const emailSentTime = card.item.qr_email_sent_at
               ? new Date(card.item.qr_email_sent_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
               : null;
@@ -612,21 +623,6 @@ export default function ManagePage() {
                     )}
                   </div>
                   <GuestTimeColumn item={card.item} />
-                  <button
-                    onClick={() => handleSendOne(card)}
-                    disabled={!card.item.email || emailBusy}
-                    style={{
-                      flexShrink: 0, padding: '8px 10px', minWidth: 72, borderRadius: 8,
-                      border: '1px solid #e2e2de',
-                      background: !card.item.email ? '#f4f4f2' : card.item.qr_email_sent_at ? '#fff' : '#161618',
-                      color: !card.item.email ? '#b4b4b0' : card.item.qr_email_sent_at ? '#161618' : '#fff',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      cursor: !card.item.email || emailBusy ? 'default' : 'pointer',
-                      fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
-                    }}
-                  >
-                    {emailBusy ? '...' : card.item.qr_email_sent_at ? 'Resend' : 'Send'}
-                  </button>
                   <button
                     onClick={() => { setActionMessage(null); setActionTarget(card); }}
                     aria-label={`Actions for ${card.item.name}`}
@@ -870,6 +866,8 @@ export default function ManagePage() {
           onDownloadPasses={() => void handleBulkDownload()}
           downloadProgress={bulkDownloadProgress}
           downloadError={bulkDownloadError}
+          onArchive={() => void handleArchive()}
+          archiving={archiving}
           onClose={() => setSettingsOpen(false)}
           onLock={handleLock}
           onSessionChange={setSession}

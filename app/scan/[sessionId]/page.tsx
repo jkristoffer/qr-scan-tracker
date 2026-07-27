@@ -11,6 +11,7 @@ import { ResultFlood, ScanResultFlood } from '@/components/ResultFlood';
 import { CheckInSource, ScanResult } from '@/lib/types';
 import { admitKnownItem, flushAdmissions } from '@/lib/admission';
 import { offlineScanner, type PreparedScanner } from '@/lib/offlineScanner';
+import { PeerSync, type PeerState } from '@/lib/peerSync';
 
 type UndoCandidate = { itemId: string; name: string; barcode: string; scannedAt: string; source: CheckInSource };
 
@@ -64,6 +65,13 @@ export default function ScannerPage() {
   const [pendingSync, setPendingSync] = useState(0);
   const [conflicts, setConflicts] = useState<Awaited<ReturnType<typeof offlineScanner.conflicts>>>([]);
   const [offlineMessage, setOfflineMessage] = useState('');
+  const [offlineSettingsOpen, setOfflineSettingsOpen] = useState(false);
+  const peerSyncRef = useRef<PeerSync | null>(null);
+  const [peerState, setPeerState] = useState<PeerState>('idle');
+  const [pairingCode, setPairingCode] = useState('');
+  const [peerCode, setPeerCode] = useState('');
+  const [pairingMessage, setPairingMessage] = useState('');
+  const [pairingBusy, setPairingBusy] = useState(false);
 
   useEffect(() => {
     const name = localStorage.getItem('gate_name');
@@ -109,6 +117,25 @@ export default function ScannerPage() {
     window.addEventListener('online', onOnline); void sync();
     return () => window.removeEventListener('online', onOnline);
   }, [sync]);
+
+  useEffect(() => {
+    const peer = new PeerSync(sessionId, {
+      onState: setPeerState,
+      onAdmission: entry => {
+        void (async () => {
+          const applied = await offlineScanner.applyPeerAdmission(entry);
+          if (applied !== 'applied') return;
+          const snapshot = await offlineScanner.get(sessionId);
+          const item = snapshot?.items.find(candidate => candidate.id === entry.itemId);
+          if (item) updateItem(item as any);
+          await refreshOfflineStatus();
+          if (navigator.onLine) await sync();
+        })();
+      },
+    });
+    peerSyncRef.current = peer;
+    return () => { peer.close(); if (peerSyncRef.current === peer) peerSyncRef.current = null; };
+  }, [refreshOfflineStatus, sessionId, sync, updateItem]);
 
   useEffect(() => {
     const channel = db.subscribeToItems(sessionId, payload => {
@@ -228,7 +255,7 @@ export default function ScannerPage() {
     let item = snapshot?.items.find(candidate => candidate.barcode === barcode) as any;
     if (!item && navigator.onLine) item = await db.getItemByBarcode(sessionId, barcode);
     if (!item) return { success: false, message: snapshot ? 'Not found' : 'Reconnect and prepare this event before offline scanning.', type: 'not_found' as const };
-    const result = await admitKnownItem(item, { sessionId, gateName, source });
+    const result = await admitKnownItem(item, { sessionId, gateName, source }, attempt => peerSyncRef.current?.sendAdmission(attempt));
     await refreshOfflineStatus();
     return result;
   }, [gateName, refreshOfflineStatus, sessionId]);
@@ -270,6 +297,33 @@ export default function ScannerPage() {
     catch (error: any) { setOfflineMessage(error.message || 'Sync pending admissions before clearing.'); }
   };
 
+  const beginPairing = async () => {
+    setPairingBusy(true); setPairingMessage('');
+    try { setPairingCode(await peerSyncRef.current!.createOffer()); setPeerCode(''); setPairingMessage('Give this code to the other gate, then paste its reply below.'); }
+    catch (error: any) { setPairingMessage(error.message || 'Could not start pairing.'); }
+    finally { setPairingBusy(false); }
+  };
+  const joinNearbyGates = () => {
+    peerSyncRef.current?.startAutoPairing();
+    setPairingMessage('Looking for another prepared scanner on this event…');
+  };
+  const replyToPairing = async () => {
+    setPairingBusy(true); setPairingMessage('');
+    try { setPairingCode(await peerSyncRef.current!.acceptOffer(peerCode)); setPeerCode(''); setPairingMessage('Return this reply code to the gate that started pairing.'); }
+    catch (error: any) { setPairingMessage(error.message || 'Could not read that pairing code.'); }
+    finally { setPairingBusy(false); }
+  };
+  const completePairing = async () => {
+    setPairingBusy(true); setPairingMessage('');
+    try { await peerSyncRef.current!.acceptAnswer(peerCode); setPeerCode(''); setPairingMessage('Connecting to the nearby gate…'); }
+    catch (error: any) { setPairingMessage(error.message || 'Could not complete pairing.'); }
+    finally { setPairingBusy(false); }
+  };
+  const copyPairingCode = async () => {
+    try { await navigator.clipboard.writeText(pairingCode); setPairingMessage('Pairing code copied.'); }
+    catch { setPairingMessage('Copy the code manually.'); }
+  };
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -296,6 +350,14 @@ export default function ScannerPage() {
             <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sessionName}</div>
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.1em', color: '#9a9a96', marginTop: 2 }}>{gateName}</div>
           </div>
+          <button
+            type="button"
+            onClick={() => setOfflineSettingsOpen(true)}
+            aria-label="Open offline scanner settings"
+            style={{ border: '1px solid #e2e2de', borderRadius: 9, width: 36, height: 36, background: '#fff', color: '#555', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}
+          >
+            ⋯
+          </button>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: '#161618', border: '1px solid #e2e2de', borderRadius: 999, padding: '5px 10px', flexShrink: 0 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: isConnected ? 'oklch(0.74 0.17 152)' : '#c2c2be', animation: isConnected ? 'liveDot 1.4s ease-in-out infinite' : 'none' }} />
             LIVE
@@ -304,17 +366,6 @@ export default function ScannerPage() {
 
         {/* Camera hero — collapsed (not unmounted) when list is fullscreen */}
         <Scanner sessionId={sessionId} onScanComplete={handleScanComplete} onScanStart={handleCameraScanStart} onBarcode={(barcode) => admit(barcode, 'camera')} hidden={listFull} />
-
-        <div style={{ flexShrink: 0, padding: '9px 14px', borderBottom: '1px solid #ececea', background: '#f7f7f5', fontSize: 11 }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button type="button" onClick={handlePrepare} style={{ border: '1px solid #cfcfca', background: '#fff', borderRadius: 7, padding: '6px 9px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Prepare for offline</button>
-            {prepared && <button type="button" onClick={handleClearOffline} disabled={pendingSync > 0} style={{ border: 0, background: 'transparent', color: pendingSync ? '#999' : '#555', fontSize: 11, cursor: pendingSync ? 'default' : 'pointer' }}>Clear offline data</button>}
-            <span style={{ marginLeft: 'auto', color: navigator.onLine ? '#287a49' : '#9a6a18' }}>{navigator.onLine ? 'Connected' : 'Offline'} · {pendingSync} queued</span>
-          </div>
-          {prepared && <div style={{ color: '#777', marginTop: 5 }}>Prepared {new Date(prepared.preparedAt).toLocaleString()} · scanner guest list only</div>}
-          {conflicts.map(conflict => <div key={conflict.attemptId} style={{ color: '#8a3b26', marginTop: 5 }}>Conflict: {new Date(conflict.capturedAt).toLocaleString()} at {conflict.gateName} lost to {new Date(conflict.winnerCapturedAt).toLocaleString()} at {conflict.winnerGateName}.</div>)}
-          {offlineMessage && <div role="status" style={{ color: '#555', marginTop: 5 }}>{offlineMessage}</div>}
-        </div>
 
         {!flood && (undoCandidate || undoMessage) && (
           <div role="status" aria-live="polite" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: undoMessage ? '#f4f4f2' : 'oklch(0.96 0.04 152)', borderBottom: '1px solid #e2e2de' }}>
@@ -381,6 +432,70 @@ export default function ScannerPage() {
             result={flood}
             onDismiss={() => { if (floodTimer.current) clearTimeout(floodTimer.current); setFlood(null); }}
           />
+        )}
+
+        {offlineSettingsOpen && (
+          <div onClick={() => setOfflineSettingsOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(20,20,22,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-label="Offline scanner settings"
+              onClick={event => event.stopPropagation()}
+              style={{ width: '100%', maxWidth: 480, background: '#fbfbfa', borderRadius: '22px 22px 0 0', padding: '24px 20px 30px', maxHeight: '70vh', overflowY: 'auto' }}
+            >
+              <div style={{ width: 38, height: 4, background: '#dcdcd8', borderRadius: 999, margin: '0 auto 20px' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <h2 style={{ fontSize: 20, margin: 0 }}>Offline scanner</h2>
+                  <div style={{ marginTop: 4, color: navigator.onLine ? '#287a49' : '#9a6a18', fontSize: 12.5 }}>{navigator.onLine ? 'Connected' : 'Offline'} · {pendingSync} queued</div>
+                </div>
+                <button type="button" onClick={() => setOfflineSettingsOpen(false)} aria-label="Close offline scanner settings" style={{ width: 32, height: 32, border: '1px solid #e2e2de', borderRadius: 9, background: '#fff', fontSize: 18, cursor: 'pointer' }}>×</button>
+              </div>
+
+              <div style={{ border: '1px solid #e2e2de', borderRadius: 12, background: '#fff', padding: 13, marginTop: 20 }}>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>Prepare this device</div>
+                <div style={{ marginTop: 4, color: '#777773', fontSize: 12.5, lineHeight: 1.45 }}>Downloads this event&apos;s guest list so this scanner can continue checking in guests without a connection.</div>
+                <button type="button" onClick={handlePrepare} style={{ width: '100%', height: 42, marginTop: 11, border: 'none', borderRadius: 9, background: prepared ? '#287a49' : '#161618', color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>{prepared ? 'Ready for offline · Refresh list' : 'Prepare for offline'}</button>
+                {prepared && <div style={{ color: '#777', marginTop: 9, fontSize: 12 }}>Prepared {new Date(prepared.preparedAt).toLocaleString()} · scanner guest list only</div>}
+                {offlineMessage && <div role="status" style={{ color: '#555', marginTop: 9, fontSize: 12 }}>{offlineMessage}</div>}
+              </div>
+
+              {prepared && <div style={{ border: '1px solid #e2e2de', borderRadius: 12, background: '#fff', padding: 13, marginTop: 9 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>Nearby gates</div>
+                  <div style={{ color: peerState === 'connected' ? '#287a49' : '#777773', fontSize: 12, fontWeight: 700, textTransform: 'capitalize' }}>{peerState}</div>
+                </div>
+                <div style={{ marginTop: 4, color: '#777773', fontSize: 12.5, lineHeight: 1.45 }}>Join another prepared scanner on this event to share check-ins directly. Server reconciliation remains final.</div>
+                {peerState !== 'connected' && <>
+                  <button type="button" onClick={joinNearbyGates} disabled={pairingBusy || peerState === 'pairing'} style={{ width: '100%', height: 42, marginTop: 11, border: 'none', borderRadius: 9, background: peerState === 'pairing' ? '#d8d8d4' : '#161618', color: peerState === 'pairing' ? '#6a6a66' : '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: pairingBusy || peerState === 'pairing' ? 'default' : 'pointer' }}>{peerState === 'pairing' ? 'Looking for nearby gates…' : 'Join nearby gates'}</button>
+                  <details style={{ marginTop: 12 }}>
+                    <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#555' }}>Pair manually instead</summary>
+                    <button type="button" onClick={beginPairing} disabled={pairingBusy} style={{ width: '100%', height: 38, marginTop: 10, border: '1px solid #d7d7d3', borderRadius: 8, background: '#fff', color: '#161618', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: pairingBusy ? 'default' : 'pointer' }}>{pairingBusy ? 'Working…' : 'Create pairing code'}</button>
+                  <div style={{ marginTop: 11, fontSize: 12, fontWeight: 700 }}>Pairing code from another gate</div>
+                  <textarea value={peerCode} onChange={event => setPeerCode(event.target.value)} placeholder="Paste an offer or reply code" rows={3} style={{ width: '100%', marginTop: 6, border: '1px solid #d7d7d3', borderRadius: 8, padding: 8, boxSizing: 'border-box', resize: 'vertical', fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }} />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 7 }}>
+                    <button type="button" onClick={replyToPairing} disabled={pairingBusy || !peerCode.trim()} style={{ flex: 1, height: 38, border: '1px solid #d7d7d3', borderRadius: 8, background: '#fff', color: '#161618', fontSize: 12, fontWeight: 700, cursor: pairingBusy || !peerCode.trim() ? 'default' : 'pointer' }}>Reply to offer</button>
+                    <button type="button" onClick={completePairing} disabled={pairingBusy || !peerCode.trim()} style={{ flex: 1, height: 38, border: '1px solid #d7d7d3', borderRadius: 8, background: '#fff', color: '#161618', fontSize: 12, fontWeight: 700, cursor: pairingBusy || !peerCode.trim() ? 'default' : 'pointer' }}>Finish pairing</button>
+                  </div>
+                  </details>
+                </>}
+                {pairingCode && <div style={{ marginTop: 11 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>Your pairing code</div>
+                  <textarea readOnly value={pairingCode} rows={4} style={{ width: '100%', marginTop: 6, border: '1px solid #d7d7d3', borderRadius: 8, padding: 8, boxSizing: 'border-box', resize: 'vertical', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, background: '#f7f7f5' }} />
+                  <button type="button" onClick={copyPairingCode} style={{ width: '100%', height: 38, marginTop: 7, border: '1px solid #d7d7d3', borderRadius: 8, background: '#fff', color: '#161618', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Copy pairing code</button>
+                </div>}
+                {pairingMessage && <div role="status" style={{ color: '#555', marginTop: 9, fontSize: 12, lineHeight: 1.4 }}>{pairingMessage}</div>}
+              </div>}
+
+              {prepared && <div style={{ border: '1px solid #e2e2de', borderRadius: 12, background: '#fff', padding: 13, marginTop: 9 }}>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>Clear offline data</div>
+                <div style={{ marginTop: 4, color: '#777773', fontSize: 12.5, lineHeight: 1.45 }}>Removes this device&apos;s saved guest list after all queued admissions have synced.</div>
+                <button type="button" onClick={handleClearOffline} disabled={pendingSync > 0} style={{ width: '100%', height: 42, marginTop: 11, border: '1px solid #d7d7d3', borderRadius: 9, background: '#fff', color: pendingSync > 0 ? '#a0a09b' : '#161618', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: pendingSync > 0 ? 'default' : 'pointer' }}>Clear offline data</button>
+              </div>}
+
+              {conflicts.map(conflict => <div key={conflict.attemptId} role="status" style={{ color: '#8a3b26', fontSize: 12, lineHeight: 1.45, marginTop: 12 }}>Conflict: {new Date(conflict.capturedAt).toLocaleString()} at {conflict.gateName} lost to {new Date(conflict.winnerCapturedAt).toLocaleString()} at {conflict.winnerGateName}.</div>)}
+            </section>
+          </div>
         )}
       </div>
     </div>

@@ -7,6 +7,7 @@ import { hashManagePin, isValidManagePin } from '@/lib/managePassword';
 import { allocateTicketCodes } from '@/lib/ticketCodes';
 import { ScanSession } from '@/lib/types';
 import { VipToggle } from '@/components/VipToggle';
+import { InstallScanner } from '@/components/InstallScanner';
 
 interface EventProgress { total: number; scanned: number; }
 
@@ -111,13 +112,6 @@ export function Dashboard() {
     }).catch(console.error);
   }, [tab]);
 
-  const handleArchive = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    const updated = await db.archiveSession(id);
-    setSessions(prev => prev.filter(s => s.id !== id));
-    setArchivedSessions(prev => [updated, ...prev]);
-  };
-
   const handleUnarchive = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     const updated = await db.unarchiveSession(id);
@@ -206,6 +200,9 @@ export function Dashboard() {
           </div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.22em', color: '#9a9a96', marginTop: 9 }}>
             DOOR SCANNER · CHECK-IN
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <InstallScanner />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.18em', color: '#b4b4b0', flexShrink: 0 }}>GATE</div>
@@ -296,14 +293,7 @@ export function Dashboard() {
                     >
                       Manage
                     </div>
-                    {tab === 'active' ? (
-                      <div
-                        onClick={e => handleArchive(e, s.id)}
-                        style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 38, padding: '0 14px', border: '1px solid #e2e2de', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#9a9a96', cursor: 'pointer' }}
-                      >
-                        Archive
-                      </div>
-                    ) : (
+                    {tab === 'archived' && (
                       <div
                         onClick={e => handleUnarchive(e, s.id)}
                         style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 38, border: '1px solid #e2e2de', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#161618', cursor: 'pointer' }}
