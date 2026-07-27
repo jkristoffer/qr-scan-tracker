@@ -2,21 +2,20 @@
 
 import { useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
-import { db } from '@/lib/supabase';
-import { checkInKnownItem } from '@/lib/checkIn';
 import { ScanResult } from '@/lib/types';
 
 interface ScannerProps {
   sessionId: string;
   onScanComplete: (result: ScanResult) => void;
   onScanStart?: (barcode: string) => boolean;
+  onBarcode: (barcode: string) => Promise<ScanResult>;
   hidden?: boolean;
 }
 
 type CamStatus = 'idle' | 'loading' | 'live' | 'denied';
 type FacingMode = 'user' | 'environment';
 
-export function Scanner({ sessionId, onScanComplete, onScanStart, hidden }: ScannerProps) {
+export function Scanner({ sessionId: _sessionId, onScanComplete, onScanStart, onBarcode, hidden }: ScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
@@ -117,7 +116,7 @@ export function Scanner({ sessionId, onScanComplete, onScanStart, hidden }: Scan
         if (shouldProcess) {
           processedVisibleCodeRef.current = code.data;
           pausedRef.current = true;
-          processScan(code.data).then(result => {
+          onBarcode(code.data).then(result => {
             onScanCompleteRef.current(result);
             setTimeout(() => { pausedRef.current = false; }, 1800);
           }).catch(() => {
@@ -149,13 +148,6 @@ export function Scanner({ sessionId, onScanComplete, onScanStart, hidden }: Scan
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facingMode]);
-
-  const processScan = async (barcode: string): Promise<ScanResult> => {
-    const gateName = localStorage.getItem('gate_name') || 'Gate';
-    const item = await db.getItemByBarcode(sessionId, barcode);
-    if (!item) return { success: false, message: 'Not found', type: 'not_found' };
-    return checkInKnownItem(item, sessionId, gateName, 'camera');
-  };
 
   const handleRetry = () => {
     setCamStatus('idle');

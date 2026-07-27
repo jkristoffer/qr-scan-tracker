@@ -152,6 +152,7 @@ export async function migrate(options: MigrateOptions = {}) {
         end if;
       end $$
     `;
+    await sql`alter table items add column if not exists admission_attempt_id uuid`;
     await sql`
       create or replace function undo_item_check_in(
         p_session_id uuid,
@@ -186,7 +187,8 @@ export async function migrate(options: MigrateOptions = {}) {
         update items
         set scanned = false,
             scanned_at = null,
-            scanned_by = null
+            scanned_by = null,
+            admission_attempt_id = null
         where id = p_item_id and session_id = p_session_id
         returning * into v_item;
 
@@ -380,6 +382,34 @@ export async function migrate(options: MigrateOptions = {}) {
         return candidate;
       end;
       $$
+    `;
+    await sql`alter table items add column if not exists admission_attempt_id uuid`;
+    await sql`
+      create table if not exists admission_attempts (
+        attempt_id uuid primary key, session_id uuid not null references scan_sessions(id) on delete cascade,
+        item_id uuid not null references items(id) on delete cascade, gate_name text not null,
+        source text not null check (source in ('camera', 'manual')), captured_at timestamptz not null,
+        outcome text not null check (outcome in ('admitted', 'duplicate', 'conflict', 'not_found')),
+        winner_attempt_id uuid, created_at timestamptz not null default now()
+      )
+    `;
+    await sql`create index if not exists idx_admission_attempts_item_captured_at on admission_attempts(item_id, captured_at)`;
+    await sql`
+      create or replace function reconcile_admissions(p_session_id uuid, p_item_id uuid, p_attempt_id uuid, p_gate_name text, p_source text, p_captured_at timestamptz)
+      returns jsonb language plpgsql as $$
+      declare v_item items%rowtype; v_existing admission_attempts%rowtype; v_winner admission_attempts%rowtype;
+      begin
+        if p_source not in ('camera', 'manual') or p_captured_at is null then raise exception 'Invalid admission input' using errcode = '22023'; end if;
+        select * into v_existing from admission_attempts where attempt_id=p_attempt_id;
+        if found then select * into v_item from items where id=v_existing.item_id; select * into v_winner from admission_attempts where attempt_id=v_existing.winner_attempt_id; return jsonb_build_object('item',to_jsonb(v_item),'outcome',v_existing.outcome,'winnerCapturedAt',v_winner.captured_at,'winnerGateName',v_winner.gate_name); end if;
+        select * into v_item from items where id=p_item_id and session_id=p_session_id for update;
+        if not found or v_item.removed then insert into admission_attempts(attempt_id,session_id,item_id,gate_name,source,captured_at,outcome) values(p_attempt_id,p_session_id,p_item_id,coalesce(nullif(btrim(p_gate_name),''),'Gate'),p_source,p_captured_at,'not_found'); return jsonb_build_object('item',null,'outcome','not_found'); end if;
+        if not v_item.scanned then update items set scanned=true,scanned_at=p_captured_at,scanned_by=coalesce(nullif(btrim(p_gate_name),''),'Gate'),admission_attempt_id=p_attempt_id where id=p_item_id returning * into v_item; insert into admission_attempts(attempt_id,session_id,item_id,gate_name,source,captured_at,outcome,winner_attempt_id) values(p_attempt_id,p_session_id,p_item_id,v_item.scanned_by,p_source,p_captured_at,'admitted',p_attempt_id); return jsonb_build_object('item',to_jsonb(v_item),'outcome','admitted'); end if;
+        if v_item.admission_attempt_id is null then insert into admission_attempts(attempt_id,session_id,item_id,gate_name,source,captured_at,outcome) values(p_attempt_id,p_session_id,p_item_id,coalesce(nullif(btrim(p_gate_name),''),'Gate'),p_source,p_captured_at,'duplicate'); return jsonb_build_object('item',to_jsonb(v_item),'outcome','duplicate'); end if;
+        select * into v_winner from admission_attempts where attempt_id=v_item.admission_attempt_id;
+        if v_winner.captured_at > p_captured_at then update admission_attempts set outcome='conflict',winner_attempt_id=p_attempt_id where attempt_id=v_winner.attempt_id; update items set scanned_at=p_captured_at,scanned_by=coalesce(nullif(btrim(p_gate_name),''),'Gate'),admission_attempt_id=p_attempt_id where id=p_item_id returning * into v_item; insert into admission_attempts(attempt_id,session_id,item_id,gate_name,source,captured_at,outcome,winner_attempt_id) values(p_attempt_id,p_session_id,p_item_id,v_item.scanned_by,p_source,p_captured_at,'admitted',p_attempt_id); return jsonb_build_object('item',to_jsonb(v_item),'outcome','admitted'); end if;
+        insert into admission_attempts(attempt_id,session_id,item_id,gate_name,source,captured_at,outcome,winner_attempt_id) values(p_attempt_id,p_session_id,p_item_id,coalesce(nullif(btrim(p_gate_name),''),'Gate'),p_source,p_captured_at,'conflict',v_winner.attempt_id); return jsonb_build_object('item',to_jsonb(v_item),'outcome','conflict','winnerCapturedAt',v_winner.captured_at,'winnerGateName',v_winner.gate_name);
+      end; $$
     `;
     if (!schema) {
       await sql`

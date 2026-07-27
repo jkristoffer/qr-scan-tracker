@@ -9,7 +9,8 @@ import { ProgressCard } from '@/components/ProgressCard';
 import { ItemList } from '@/components/ItemList';
 import { ResultFlood, ScanResultFlood } from '@/components/ResultFlood';
 import { CheckInSource, ScanResult } from '@/lib/types';
-import { checkInKnownItem } from '@/lib/checkIn';
+import { admitKnownItem, flushAdmissions } from '@/lib/admission';
+import { offlineScanner, type PreparedScanner } from '@/lib/offlineScanner';
 
 type UndoCandidate = { itemId: string; name: string; barcode: string; scannedAt: string; source: CheckInSource };
 
@@ -59,6 +60,10 @@ export default function ScannerPage() {
   const [failedItemId, setFailedItemId] = useState<string | null>(null);
   const admissionOwnerRef = useRef<'camera' | 'manual' | null>(null);
   const [admissionBusy, setAdmissionBusy] = useState(false);
+  const [prepared, setPrepared] = useState<PreparedScanner | null>(null);
+  const [pendingSync, setPendingSync] = useState(0);
+  const [conflicts, setConflicts] = useState<Awaited<ReturnType<typeof offlineScanner.conflicts>>>([]);
+  const [offlineMessage, setOfflineMessage] = useState('');
 
   useEffect(() => {
     const name = localStorage.getItem('gate_name');
@@ -73,13 +78,37 @@ export default function ScannerPage() {
         const items = await db.getItems(sessionId);
         setItems(items);
       } catch {
-        router.push('/');
+        const snapshot = await offlineScanner.get(sessionId);
+        if (!snapshot) { router.push('/'); return; }
+        setSessionName(snapshot.session.name);
+        setItems(snapshot.items as any);
       } finally {
+        const snapshot = await offlineScanner.get(sessionId); setPrepared(snapshot);
+        setPendingSync((await offlineScanner.pending(sessionId)).length);
         setLoading(false);
       }
     };
     load();
   }, [sessionId, router, setItems]);
+
+  const refreshOfflineStatus = useCallback(async () => {
+    setPrepared(await offlineScanner.get(sessionId));
+    setPendingSync((await offlineScanner.pending(sessionId)).length);
+    setConflicts(await offlineScanner.conflicts(sessionId));
+  }, [sessionId]);
+
+  const sync = useCallback(async () => {
+    if (!navigator.onLine) return;
+    const results = await flushAdmissions(sessionId);
+    for (const entry of results) if (entry.item) updateItem(entry.item);
+    await refreshOfflineStatus();
+  }, [refreshOfflineStatus, sessionId, updateItem]);
+
+  useEffect(() => {
+    const onOnline = () => { void sync(); };
+    window.addEventListener('online', onOnline); void sync();
+    return () => window.removeEventListener('online', onOnline);
+  }, [sync]);
 
   useEffect(() => {
     const channel = db.subscribeToItems(sessionId, payload => {
@@ -149,7 +178,7 @@ export default function ScannerPage() {
           ? (result.item?.name ?? 'Already checked in')
           : 'Ticket not recognised',
       sub: result.type === 'success'
-        ? (result.item?.barcode ?? '')
+        ? (result.syncState === 'pending' ? `PENDING SYNC · ${result.item?.barcode ?? ''}` : (result.item?.barcode ?? ''))
         : result.type === 'duplicate'
           ? 'Entered earlier · This gate'
           : 'Code ' + (result.item?.barcode ?? '—'),
@@ -162,6 +191,21 @@ export default function ScannerPage() {
     const candidate = undoCandidate;
     setUndoRunning(true);
     try {
+      if (!navigator.onLine) {
+        const cancelled = await offlineScanner.undoPending(sessionId, candidate.itemId);
+        if (cancelled) {
+          const snapshot = await offlineScanner.get(sessionId);
+          const item = snapshot?.items.find(entry => entry.id === candidate.itemId);
+          if (item) updateItem(item as any);
+          await refreshOfflineStatus();
+          setUndoMessage(`${candidate.name} provisional check-in cancelled`);
+          if (undoTimer.current) clearTimeout(undoTimer.current);
+          setUndoCandidate(null);
+          return;
+        }
+        setUndoMessage('Reconnect to undo a synced admission.');
+        return;
+      }
       const result = await db.undoItemCheckIn(sessionId, candidate.itemId, candidate.scannedAt, gateName, candidate.source);
       if (result.status === 'undone' && result.item) {
         updateItem(result.item);
@@ -179,7 +223,17 @@ export default function ScannerPage() {
     }
   };
 
-  const handleManualCheckIn = useCallback(async (item: Parameters<typeof checkInKnownItem>[0]) => {
+  const admit = useCallback(async (barcode: string, source: 'camera' | 'manual') => {
+    const snapshot = await offlineScanner.get(sessionId);
+    let item = snapshot?.items.find(candidate => candidate.barcode === barcode) as any;
+    if (!item && navigator.onLine) item = await db.getItemByBarcode(sessionId, barcode);
+    if (!item) return { success: false, message: snapshot ? 'Not found' : 'Reconnect and prepare this event before offline scanning.', type: 'not_found' as const };
+    const result = await admitKnownItem(item, { sessionId, gateName, source });
+    await refreshOfflineStatus();
+    return result;
+  }, [gateName, refreshOfflineStatus, sessionId]);
+
+  const handleManualCheckIn = useCallback(async (item: any) => {
     if (admissionOwnerRef.current) return;
     admissionOwnerRef.current = 'manual';
     setAdmissionBusy(true);
@@ -188,7 +242,7 @@ export default function ScannerPage() {
     setPendingItemId(item.id);
 
     try {
-      const result = await checkInKnownItem(item, sessionId, gateName, 'manual');
+      const result = await admit(item.barcode, 'manual');
       handleScanComplete(result, 'manual');
     } catch {
       setFailedItemId(item.id);
@@ -199,7 +253,22 @@ export default function ScannerPage() {
       }
       setPendingItemId(null);
     }
-  }, [clearUndo, gateName, handleScanComplete, sessionId]);
+  }, [admit, clearUndo, handleScanComplete]);
+
+  const handlePrepare = async () => {
+    if (!navigator.onLine) { setOfflineMessage('Reconnect before preparing this scanner.'); return; }
+    try {
+      const [session, items] = await Promise.all([db.getSession(sessionId), db.getItems(sessionId)]);
+      const snapshot = await offlineScanner.prepare(session, items);
+      setPrepared(snapshot); setOfflineMessage(`Prepared ${new Date(snapshot.preparedAt).toLocaleTimeString()}`);
+      if ('serviceWorker' in navigator) await navigator.serviceWorker.ready;
+    } catch { setOfflineMessage('Could not prepare offline data. Check your connection.'); }
+  };
+
+  const handleClearOffline = async () => {
+    try { await offlineScanner.clear(sessionId); await refreshOfflineStatus(); setOfflineMessage('Offline data cleared.'); }
+    catch (error: any) { setOfflineMessage(error.message || 'Sync pending admissions before clearing.'); }
+  };
 
   if (loading) {
     return (
@@ -234,7 +303,18 @@ export default function ScannerPage() {
         </div>
 
         {/* Camera hero — collapsed (not unmounted) when list is fullscreen */}
-        <Scanner sessionId={sessionId} onScanComplete={handleScanComplete} onScanStart={handleCameraScanStart} hidden={listFull} />
+        <Scanner sessionId={sessionId} onScanComplete={handleScanComplete} onScanStart={handleCameraScanStart} onBarcode={(barcode) => admit(barcode, 'camera')} hidden={listFull} />
+
+        <div style={{ flexShrink: 0, padding: '9px 14px', borderBottom: '1px solid #ececea', background: '#f7f7f5', fontSize: 11 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button type="button" onClick={handlePrepare} style={{ border: '1px solid #cfcfca', background: '#fff', borderRadius: 7, padding: '6px 9px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Prepare for offline</button>
+            {prepared && <button type="button" onClick={handleClearOffline} disabled={pendingSync > 0} style={{ border: 0, background: 'transparent', color: pendingSync ? '#999' : '#555', fontSize: 11, cursor: pendingSync ? 'default' : 'pointer' }}>Clear offline data</button>}
+            <span style={{ marginLeft: 'auto', color: navigator.onLine ? '#287a49' : '#9a6a18' }}>{navigator.onLine ? 'Connected' : 'Offline'} · {pendingSync} queued</span>
+          </div>
+          {prepared && <div style={{ color: '#777', marginTop: 5 }}>Prepared {new Date(prepared.preparedAt).toLocaleString()} · scanner guest list only</div>}
+          {conflicts.map(conflict => <div key={conflict.attemptId} style={{ color: '#8a3b26', marginTop: 5 }}>Conflict: {new Date(conflict.capturedAt).toLocaleString()} at {conflict.gateName} lost to {new Date(conflict.winnerCapturedAt).toLocaleString()} at {conflict.winnerGateName}.</div>)}
+          {offlineMessage && <div role="status" style={{ color: '#555', marginTop: 5 }}>{offlineMessage}</div>}
+        </div>
 
         {!flood && (undoCandidate || undoMessage) && (
           <div role="status" aria-live="polite" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: undoMessage ? '#f4f4f2' : 'oklch(0.96 0.04 152)', borderBottom: '1px solid #e2e2de' }}>

@@ -6,6 +6,7 @@ import type {
   UndoCheckInResult,
   UpdateItemDetailsInput,
 } from './types';
+import type { AdmissionInput, AdmissionResult } from './admission';
 
 let _client: SupabaseClient | null = null;
 const SESSION_COLUMNS = 'id,name,created_at,archived';
@@ -284,6 +285,19 @@ export const db = {
       .maybeSingle();
     if (error) throw error;
     return data;
+  },
+
+  async reconcileAdmission(input: AdmissionInput): Promise<AdmissionResult> {
+    const { data, error } = await getClient().rpc('reconcile_admissions', {
+      p_session_id: input.sessionId,
+      p_item_id: input.itemId,
+      p_attempt_id: input.attemptId,
+      p_gate_name: input.gateName,
+      p_source: input.source,
+      p_captured_at: input.capturedAt,
+    });
+    if (error) throw error;
+    return data as AdmissionResult;
   },
 
   async addItem(sessionId: string, name: string, barcode: string, email?: string | null, isVIP = false) {

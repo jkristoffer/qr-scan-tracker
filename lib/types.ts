@@ -24,13 +24,17 @@ export interface Item {
   qr_email_sent_at: string | null;
   qr_email_resend_id: string | null;
   qr_email_last_error: string | null;
+  admission_attempt_id?: string | null;
 }
+
+export type AdmissionSyncState = 'confirmed' | 'pending' | 'conflict';
 
 export interface ScanResult {
   success: boolean;
   item?: Item;
   message: string;
   type: 'success' | 'duplicate' | 'not_found';
+  syncState?: AdmissionSyncState;
 }
 
 export interface Progress {

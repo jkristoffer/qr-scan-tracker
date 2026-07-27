@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { PwaRegistration } from '@/components/PwaRegistration';
 
 export const metadata: Metadata = {
   title: 'Gate Scanner',
   description: 'Real-time ticket scanning for events',
+  manifest: '/manifest.webmanifest',
 };
 
 export const viewport: Viewport = {
@@ -62,6 +64,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
       </head>
       <body>
+        <PwaRegistration />
         {children}
         <div
           className="no-print"
