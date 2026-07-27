@@ -15,6 +15,7 @@ export interface Item {
   barcode: string;
   name: string;
   email: string | null;
+  tag: string | null;
   isVIP: boolean;
   created_at: string;
   scanned: boolean;
@@ -56,6 +57,7 @@ export interface UndoCheckInResult {
 export interface UpdateItemDetailsInput {
   name: string;
   email: string | null;
+  tag: string | null;
   isVIP: boolean;
 }
 

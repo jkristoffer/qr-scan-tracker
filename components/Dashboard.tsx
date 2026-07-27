@@ -6,6 +6,7 @@ import { db } from '@/lib/supabase';
 import { hashManagePin, isValidManagePin } from '@/lib/managePassword';
 import { allocateTicketCodes } from '@/lib/ticketCodes';
 import { ScanSession } from '@/lib/types';
+import { distinctGuestTags } from '@/lib/guestTags';
 import { VipToggle } from '@/components/VipToggle';
 import { InstallScanner } from '@/components/InstallScanner';
 
@@ -17,6 +18,7 @@ interface GuestInput {
   id: number;
   name: string;
   email: string;
+  tag: string;
   isVIP: boolean;
 }
 
@@ -24,25 +26,38 @@ interface GuestItem {
   barcode: string;
   name: string;
   email: string | null;
+  tag: string | null;
   isVIP: boolean;
 }
 
-const EMPTY_UPLOAD_LABEL = { title: 'Upload guest list', sub: 'CSV barcode,name,email,isVIP or TXT names' };
+const EMPTY_UPLOAD_LABEL = { title: 'Upload guest list', sub: 'CSV barcode,name,email,isVIP,tag or TXT names' };
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function parseGuestRows(text: string): GuestItem[] {
   const lines = text.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
-  const dataLines = lines[0]?.toLowerCase().replace(/\s/g, '').startsWith('barcode,name')
-    ? lines.slice(1)
-    : lines;
+  const header = lines[0]?.split(',').map(value => value.trim().toLowerCase().replace(/\s/g, '')) || [];
+  const hasHeader = header[0] === 'barcode' && header[1] === 'name';
+  const dataLines = hasHeader ? lines.slice(1) : lines;
+  const columnIndex = (name: string, fallback: number) => hasHeader ? header.indexOf(name) : fallback;
+  const barcodeIndex = columnIndex('barcode', 0);
+  const nameIndex = columnIndex('name', 1);
+  const emailIndex = columnIndex('email', 2);
+  const vipIndex = columnIndex('isvip', 3);
+  const tagIndex = columnIndex('tag', 4);
 
   return dataLines.slice(0, 500).map(ln => {
-    const [barcodeRaw, nameRaw, emailRaw, vipRaw] = ln.split(',').map(s => s.trim());
+    const fields = ln.split(',').map(s => s.trim());
+    const barcodeRaw = fields[barcodeIndex];
+    const nameRaw = fields[nameIndex];
+    const emailRaw = emailIndex >= 0 ? fields[emailIndex] : '';
+    const vipRaw = vipIndex >= 0 ? fields[vipIndex] : '';
+    const tagRaw = tagIndex >= 0 ? fields[tagIndex] : '';
     const barcode = barcodeRaw || ln;
     return {
       barcode,
       name: nameRaw || barcode,
       email: emailRaw || null,
+      tag: tagRaw || null,
       isVIP: ['true', 'yes', '1', 'vip'].includes(vipRaw?.toLowerCase()),
     };
   }).filter(item => item.barcode);
@@ -60,7 +75,7 @@ export function Dashboard() {
   const [uploadLabel, setUploadLabel] = useState<{ title: string; sub: string }>(EMPTY_UPLOAD_LABEL);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [uploadedGuests, setUploadedGuests] = useState<GuestItem[]>([]);
-  const [manualGuests, setManualGuests] = useState<GuestInput[]>([{ id: 1, name: '', email: '', isVIP: false }]);
+  const [manualGuests, setManualGuests] = useState<GuestInput[]>([{ id: 1, name: '', email: '', tag: '', isVIP: false }]);
   const [creationError, setCreationError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [gateName, setGateName] = useState('');
@@ -70,7 +85,11 @@ export function Dashboard() {
   const nextManualGuestId = useRef(2);
   const uploadRequestId = useRef(0);
 
-  const populatedManualGuests = manualGuests.filter(guest => guest.name.trim() || guest.email.trim());
+  const populatedManualGuests = manualGuests.filter(guest => guest.name.trim() || guest.email.trim() || guest.tag.trim());
+  const tagSuggestions = distinctGuestTags([
+    ...uploadedGuests.map(guest => guest.tag),
+    ...manualGuests.map(guest => guest.tag),
+  ]);
   const manualGuestErrors = new Map<number, { name?: string; email?: string }>();
   for (const guest of populatedManualGuests) {
     const errors: { name?: string; email?: string } = {};
@@ -142,17 +161,17 @@ export function Dashboard() {
   };
 
   const addManualGuest = () => {
-    setManualGuests(prev => [...prev, { id: nextManualGuestId.current++, name: '', email: '', isVIP: false }]);
+    setManualGuests(prev => [...prev, { id: nextManualGuestId.current++, name: '', email: '', tag: '', isVIP: false }]);
   };
 
-  const updateManualGuest = (id: number, field: 'name' | 'email' | 'isVIP', value: string | boolean) => {
+  const updateManualGuest = (id: number, field: 'name' | 'email' | 'tag' | 'isVIP', value: string | boolean) => {
     setManualGuests(prev => prev.map(guest => guest.id === id ? { ...guest, [field]: value } : guest));
     setCreationError(null);
   };
 
   const removeManualGuest = (id: number) => {
     setManualGuests(prev => prev.length === 1
-      ? [{ ...prev[0], name: '', email: '', isVIP: false }]
+      ? [{ ...prev[0], name: '', email: '', tag: '', isVIP: false }]
       : prev.filter(guest => guest.id !== id));
     setCreationError(null);
   };
@@ -165,6 +184,7 @@ export function Dashboard() {
       barcode: manualBarcodes[index],
       name: guest.name.trim(),
       email: guest.email.trim() || null,
+      tag: guest.tag.trim() || null,
       isVIP: guest.isVIP,
     }));
 
@@ -433,6 +453,14 @@ export function Dashboard() {
                         style={{ width: '100%', border: `1px solid ${errors?.email ? '#d92d20' : '#dcdcd8'}`, background: '#fff', borderRadius: 9, padding: '11px 12px', fontSize: 14.5, fontFamily: 'inherit', outline: 'none', marginTop: 8 }}
                       />
                       {errors?.email && <div style={{ color: '#b42318', fontSize: 11.5, marginTop: 5 }}>{errors.email}</div>}
+                      <input
+                        value={guest.tag}
+                        onChange={e => updateManualGuest(guest.id, 'tag', e.target.value)}
+                        placeholder="Tag (optional)"
+                        aria-label={`Guest ${index + 1} tag`}
+                        list="new-event-tag-suggestions"
+                        style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 9, padding: '11px 12px', fontSize: 14.5, fontFamily: 'inherit', outline: 'none', marginTop: 8 }}
+                      />
                       <div style={{ marginTop: 10 }}>
                         <VipToggle
                           checked={guest.isVIP}
@@ -443,6 +471,9 @@ export function Dashboard() {
                   );
                 })}
               </div>
+              <datalist id="new-event-tag-suggestions">
+                {tagSuggestions.map(tag => <option key={tag.toLowerCase()} value={tag} />)}
+              </datalist>
 
               <button
                 type="button"

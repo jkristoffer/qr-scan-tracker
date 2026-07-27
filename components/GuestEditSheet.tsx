@@ -11,13 +11,15 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 interface GuestEditSheetProps {
   sessionId: string;
   item: Item;
+  tagSuggestions: string[];
   onClose: () => void;
   onSaved: (item: Item, dataUrl?: string) => void;
 }
 
-export function GuestEditSheet({ sessionId, item, onClose, onSaved }: GuestEditSheetProps) {
+export function GuestEditSheet({ sessionId, item, tagSuggestions, onClose, onSaved }: GuestEditSheetProps) {
   const [name, setName] = useState(item.name);
   const [email, setEmail] = useState(item.email || '');
+  const [tag, setTag] = useState(item.tag || '');
   const [isVIP, setIsVIP] = useState(item.isVIP);
   const [saving, setSaving] = useState(false);
   const [writeError, setWriteError] = useState('');
@@ -28,10 +30,12 @@ export function GuestEditSheet({ sessionId, item, onClose, onSaved }: GuestEditS
 
   const trimmedName = name.trim();
   const trimmedEmail = email.trim();
+  const trimmedTag = tag.trim();
   const nameError = trimmedName ? '' : 'Name is required.';
   const emailError = trimmedEmail && !EMAIL_PATTERN.test(trimmedEmail) ? 'Enter a valid email.' : '';
   const detailsChanged = trimmedName !== item.name.trim()
     || trimmedEmail !== (item.email?.trim() || '')
+    || trimmedTag !== (item.tag?.trim() || '')
     || isVIP !== item.isVIP;
   const saveDisabled = saving || !detailsChanged || Boolean(nameError || emailError);
   const trimmedCode = replacementCode.trim();
@@ -63,6 +67,7 @@ export function GuestEditSheet({ sessionId, item, onClose, onSaved }: GuestEditS
       const updated = await db.updateItemDetails(sessionId, item.id, {
         name: trimmedName,
         email: trimmedEmail || null,
+        tag: trimmedTag || null,
         isVIP,
       });
       if (!updated) {
@@ -140,11 +145,17 @@ export function GuestEditSheet({ sessionId, item, onClose, onSaved }: GuestEditS
         <label htmlFor="edit-guest-email" style={{ display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Email optional</label>
         <input id="edit-guest-email" type="email" value={email} onChange={event => setEmail(event.target.value)} disabled={saving} aria-invalid={Boolean(emailError)} aria-describedby="edit-email-error" style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${emailError ? 'oklch(0.62 0.18 32)' : '#dcdcd8'}`, background: '#fff', borderRadius: 10, padding: '11px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }} />
         <div id="edit-email-error" style={{ minHeight: 18, marginTop: 4, fontSize: 11, color: 'oklch(0.48 0.16 32)' }}>{emailError}</div>
+        <label htmlFor="edit-guest-tag" style={{ display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Tag optional</label>
+        <input id="edit-guest-tag" value={tag} onChange={event => setTag(event.target.value)} disabled={saving} list="edit-guest-tag-suggestions" placeholder="e.g. Sponsor" style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 10, padding: '11px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }} />
+        <datalist id="edit-guest-tag-suggestions">
+          {tagSuggestions.map(suggestion => <option key={suggestion.toLowerCase()} value={suggestion} />)}
+        </datalist>
+        <div style={{ minHeight: 18, marginTop: 4, fontSize: 11, color: '#9a9a96' }}>Internal Manage label; it is not shown on the guest pass.</div>
         <div style={{ marginBottom: 12 }}>
           <VipToggle checked={isVIP} onChange={setIsVIP} disabled={saving} />
         </div>
         <div style={{ background: '#f0f0ed', borderRadius: 10, padding: '10px 12px', marginTop: 3, fontSize: 12, color: '#5a5a56', lineHeight: 1.45 }}>
-          Current ticket: <strong>{item.barcode}</strong>. Saving a correction marks the pass unsent; it is not emailed automatically.
+          Current ticket: <strong>{item.barcode}</strong>. Name, email, or VIP changes mark the pass unsent; tag-only changes do not.
         </div>
         {writeError && <div role="alert" style={{ background: 'oklch(0.96 0.06 32)', borderRadius: 8, padding: '9px 10px', marginTop: 10, fontSize: 12, color: 'oklch(0.48 0.16 32)' }}>{writeError}</div>}
         <button onClick={() => setReplacing(true)} disabled={saving} style={{ width: '100%', height: 46, marginTop: 12, borderRadius: 10, border: '1px solid #e2e2de', background: '#fff', color: '#161618', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer' }}>Replace ticket code</button>

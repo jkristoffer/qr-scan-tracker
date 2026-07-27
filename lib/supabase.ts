@@ -7,6 +7,7 @@ import type {
   UpdateItemDetailsInput,
 } from './types';
 import type { AdmissionInput, AdmissionResult } from './admission';
+import { normalizeGuestTag } from './guestTags';
 
 let _client: SupabaseClient | null = null;
 const SESSION_COLUMNS = 'id,name,created_at,archived';
@@ -150,7 +151,7 @@ export const db = {
     return data;
   },
 
-  async createItems(items: { barcode: string; name: string; email?: string | null; isVIP?: boolean }[], sessionId: string) {
+  async createItems(items: { barcode: string; name: string; email?: string | null; tag?: string | null; isVIP?: boolean }[], sessionId: string) {
     const client = getClient();
     const BATCH_SIZE = 100;
     const results = [];
@@ -158,7 +159,7 @@ export const db = {
       const batch = items.slice(i, i + BATCH_SIZE);
       const { data, error } = await client
         .from('items')
-        .insert(batch.map(item => ({ ...item, session_id: sessionId })))
+        .insert(batch.map(item => ({ ...item, tag: normalizeGuestTag(item.tag), session_id: sessionId })))
         .select();
       if (error) throw error;
       results.push(...(data || []));
@@ -225,18 +226,25 @@ export const db = {
 
     const name = input.name.trim();
     const email = input.email?.trim() || null;
-    if (current.name === name && current.email === email && current.isVIP === input.isVIP) return current;
+    const tag = normalizeGuestTag(input.tag);
+    const ticketDetailsChanged = current.name !== name || current.email !== email || current.isVIP !== input.isVIP;
+    if (!ticketDetailsChanged && current.tag === tag) return current;
+
+    const patch: Record<string, string | boolean | null> = {
+      name,
+      email,
+      tag,
+      isVIP: input.isVIP,
+    };
+    if (ticketDetailsChanged) {
+      patch.qr_email_sent_at = null;
+      patch.qr_email_resend_id = null;
+      patch.qr_email_last_error = null;
+    }
 
     const { data, error } = await getClient()
       .from('items')
-      .update({
-        name,
-        email,
-        isVIP: input.isVIP,
-        qr_email_sent_at: null,
-        qr_email_resend_id: null,
-        qr_email_last_error: null,
-      })
+      .update(patch)
       .eq('session_id', sessionId)
       .eq('id', itemId)
       .select()
@@ -300,10 +308,10 @@ export const db = {
     return data as AdmissionResult;
   },
 
-  async addItem(sessionId: string, name: string, barcode: string, email?: string | null, isVIP = false) {
+  async addItem(sessionId: string, name: string, barcode: string, email?: string | null, isVIP = false, tag?: string | null) {
     const { data, error } = await getClient()
       .from('items')
-      .insert({ session_id: sessionId, name, barcode, email: email || null, isVIP, scanned: false })
+      .insert({ session_id: sessionId, name, barcode, email: email || null, tag: normalizeGuestTag(tag), isVIP, scanned: false })
       .select()
       .single();
     if (error) throw error;

@@ -40,6 +40,7 @@ export async function migrate(options: MigrateOptions = {}) {
         barcode text not null,
         name text not null,
         email text,
+        tag text,
         "isVIP" boolean not null default false,
         created_at timestamptz not null default now(),
         scanned boolean default false,
@@ -52,6 +53,7 @@ export async function migrate(options: MigrateOptions = {}) {
       )
     `;
     await sql`alter table items add column if not exists email text`;
+    await sql`alter table items add column if not exists tag text`;
     await sql`alter table items add column if not exists "isVIP" boolean not null default false`;
     await sql`alter table items add column if not exists created_at timestamptz`;
     await sql`

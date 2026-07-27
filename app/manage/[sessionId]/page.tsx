@@ -13,6 +13,7 @@ import { toQrDataUrl } from '@/lib/qr';
 import { generateTicketCode } from '@/lib/ticketCodes';
 import { renderTicketPassImage } from '@/lib/ticketPass';
 import { createZip } from '@/lib/zip';
+import { compareGuestTags, distinctGuestTags, guestTagKey } from '@/lib/guestTags';
 import { Item, ManageSession } from '@/lib/types';
 
 interface GuestCard {
@@ -22,7 +23,7 @@ interface GuestCard {
 
 type Tab = 'active' | 'removed';
 type TallyFilter = 'total' | 'checked_in' | 'pending';
-type TimeSort = 'checked_in' | 'added';
+type GuestSort = 'checked_in' | 'added' | 'tag';
 type SortDirection = 'desc' | 'asc';
 type AccessState = 'checking' | 'locked' | 'unlocked';
 
@@ -43,10 +44,16 @@ function sortedActive(cards: GuestCard[], pinnedId?: string): GuestCard[] {
   });
 }
 
-function sortedByTime(cards: GuestCard[], sort: TimeSort, direction: SortDirection, pinnedId?: string): GuestCard[] {
+function sortedGuestCards(cards: GuestCard[], sort: GuestSort, direction: SortDirection, pinnedId?: string): GuestCard[] {
   return [...cards].sort((a, b) => {
     if (a.item.id === pinnedId) return -1;
     if (b.item.id === pinnedId) return 1;
+
+    if (sort === 'tag') {
+      const tagDifference = compareGuestTags(a.item.tag, b.item.tag, direction);
+      if (tagDifference !== 0) return tagDifference;
+      return a.item.name.localeCompare(b.item.name);
+    }
 
     const aTimestamp = sort === 'checked_in' ? a.item.scanned_at : a.item.created_at;
     const bTimestamp = sort === 'checked_in' ? b.item.scanned_at : b.item.created_at;
@@ -58,6 +65,18 @@ function sortedByTime(cards: GuestCard[], sort: TimeSort, direction: SortDirecti
     if (difference !== 0) return direction === 'asc' ? difference : -difference;
     return a.item.name.localeCompare(b.item.name);
   });
+}
+
+function GuestTagBadge({ tag }: { tag: string | null }) {
+  if (!tag) return null;
+  return (
+    <span
+      title={tag}
+      style={{ flexShrink: 1, minWidth: 0, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', border: '1px solid #d8d8d4', background: '#f4f4f2', color: '#5a5a56', borderRadius: 999, padding: '3px 8px', fontFamily: "'JetBrains Mono', monospace", fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em' }}
+    >
+      {tag}
+    </span>
+  );
 }
 
 function GuestTimeColumn({ item }: { item: Item }) {
@@ -104,10 +123,12 @@ export default function ManagePage() {
   const [addGuestOpen, setAddGuestOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('active');
   const [tallyFilter, setTallyFilter] = useState<TallyFilter>('total');
-  const [timeSort, setTimeSort] = useState<TimeSort>('added');
+  const [guestSort, setGuestSort] = useState<GuestSort>('added');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [tagFilter, setTagFilter] = useState('');
   const [addName, setAddName] = useState('');
   const [addEmail, setAddEmail] = useState('');
+  const [addTag, setAddTag] = useState('');
   const [addIsVIP, setAddIsVIP] = useState(false);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -205,6 +226,13 @@ export default function ManagePage() {
     return () => { cancelled = true; };
   }, [accessState, sessionId, router]);
 
+  useEffect(() => {
+    if (!tagFilter) return;
+    const matchingTag = cards.find(card => guestTagKey(card.item.tag) === guestTagKey(tagFilter))?.item.tag;
+    if (!matchingTag) setTagFilter('');
+    else if (matchingTag !== tagFilter) setTagFilter(matchingTag);
+  }, [cards, tagFilter]);
+
   const pinTemporarily = useCallback((id: string) => {
     setPinnedId(id);
     if (pinTimerRef.current) clearTimeout(pinTimerRef.current);
@@ -218,11 +246,12 @@ export default function ManagePage() {
     setAddError(null);
     try {
       const barcode = generateTicketCode(cards.map(c => c.item.barcode));
-      const item = await db.addItem(sessionId, name, barcode, addEmail.trim() || null, addIsVIP);
+      const item = await db.addItem(sessionId, name, barcode, addEmail.trim() || null, addIsVIP, addTag);
       const dataUrl = await toQrDataUrl(barcode);
       setCards(prev => [...prev, { item, dataUrl }]);
       setAddName('');
       setAddEmail('');
+      setAddTag('');
       setAddIsVIP(false);
       setAddGuestOpen(false);
       setTab('active');
@@ -326,10 +355,17 @@ export default function ManagePage() {
   };
 
   const handleEditSaved = (item: Item, dataUrl?: string) => {
+    const ticketDetailsChanged = Boolean(editTarget && (
+      editTarget.item.name !== item.name
+      || editTarget.item.email !== item.email
+      || editTarget.item.isVIP !== item.isVIP
+    ));
     setCards(prev => prev.map(card => card.item.id === item.id ? { ...card, item, dataUrl: dataUrl || card.dataUrl } : card));
     setEditTarget(null);
     pinTemporarily(item.id);
-    setActionMessage(`${item.name} updated. Corrected pass is ready to send or print.`);
+    setActionMessage(ticketDetailsChanged
+      ? `${item.name} updated. Corrected pass is ready to send or print.`
+      : `${item.name} tag updated.`);
   };
 
   const handleUndo = async () => {
@@ -402,30 +438,38 @@ export default function ManagePage() {
 
   const activeCards = cards.filter(c => !c.item.removed);
   const removedCards = cards.filter(c => c.item.removed);
+  const tagOptions = distinctGuestTags(cards.map(card => card.item.tag));
+  const selectedTagKey = guestTagKey(tagFilter);
   const totalActive = activeCards.length;
   const checkedIn = cards.filter(c => c.item.scanned).length;
   const unscanned = activeCards.filter(c => !c.item.scanned).length;
 
-  const filteredActive = tallyFilter === 'checked_in'
+  const statusFilteredActive = tallyFilter === 'checked_in'
     ? activeCards.filter(c => c.item.scanned)
     : tallyFilter === 'pending'
     ? activeCards.filter(c => !c.item.scanned)
     : activeCards;
+  const filteredActive = selectedTagKey
+    ? statusFilteredActive.filter(card => guestTagKey(card.item.tag) === selectedTagKey)
+    : statusFilteredActive;
+  const filteredRemoved = selectedTagKey
+    ? removedCards.filter(card => guestTagKey(card.item.tag) === selectedTagKey)
+    : removedCards;
 
-  const displayActive = sortedByTime(filteredActive, timeSort, sortDirection, pinnedId);
-  const displayRemoved = sortedByTime(removedCards, timeSort, sortDirection, pinnedId);
+  const displayActive = sortedGuestCards(filteredActive, guestSort, sortDirection, pinnedId);
+  const displayRemoved = sortedGuestCards(filteredRemoved, guestSort, sortDirection, pinnedId);
 
   const handleTallyClick = (f: TallyFilter) => {
     setTallyFilter(prev => (prev === f && f !== 'total') ? 'total' : f);
   };
 
-  const handleTimeSort = (sort: TimeSort) => {
-    if (timeSort === sort) {
+  const handleGuestSort = (sort: GuestSort) => {
+    if (guestSort === sort) {
       setSortDirection(current => current === 'desc' ? 'asc' : 'desc');
       return;
     }
-    setTimeSort(sort);
-    setSortDirection('desc');
+    setGuestSort(sort);
+    setSortDirection(sort === 'tag' ? 'asc' : 'desc');
   };
 
   const handleBulkDownload = async () => {
@@ -526,20 +570,33 @@ export default function ManagePage() {
           <div style={{ display: 'flex', alignItems: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: '#777773' }}>
             {tab === 'active' ? 'ACTIVE GUESTS' : 'REMOVED GUESTS'}
           </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, flexWrap: 'wrap' }}>
+            <label htmlFor="guest-tag-filter" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.1em', color: '#777773' }}>TAG</label>
+            <select
+              id="guest-tag-filter"
+              value={tagFilter}
+              onChange={event => setTagFilter(event.target.value)}
+              style={{ height: 32, maxWidth: 180, borderRadius: 8, border: '1px solid #dcdcd8', background: '#fff', color: '#4a4a46', padding: '0 8px', fontFamily: 'inherit', fontSize: 11, fontWeight: 700, cursor: 'pointer', WebkitAppearance: 'menulist', appearance: 'auto' }}
+            >
+              <option value="">All tags</option>
+              {tagOptions.map(tag => <option key={guestTagKey(tag)} value={tag}>{tag}</option>)}
+            </select>
             <span style={{ marginRight: 2, fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.1em', color: '#777773' }}>SORT</span>
             {([
-              { label: 'Checked in', sort: 'checked_in' as TimeSort },
-              { label: 'Added', sort: 'added' as TimeSort },
+              { label: 'Checked in', sort: 'checked_in' as GuestSort },
+              { label: 'Added', sort: 'added' as GuestSort },
+              { label: 'Tag', sort: 'tag' as GuestSort },
             ]).map(({ label, sort }) => {
-              const active = timeSort === sort;
+              const active = guestSort === sort;
               return (
                 <button
                   key={sort}
                   type="button"
-                  onClick={() => handleTimeSort(sort)}
+                  onClick={() => handleGuestSort(sort)}
                   aria-pressed={active}
-                  aria-label={`Sort by ${label.toLowerCase()}, ${active && sortDirection === 'asc' ? 'oldest first' : 'newest first'}`}
+                  aria-label={`Sort by ${label.toLowerCase()}, ${sort === 'tag'
+                    ? active && sortDirection === 'desc' ? 'Z to A' : 'A to Z'
+                    : active && sortDirection === 'asc' ? 'oldest first' : 'newest first'}`}
                   style={{
                     height: 32, borderRadius: 8, padding: '0 10px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 700,
                     border: `1px solid ${active ? '#161618' : '#dcdcd8'}`,
@@ -565,7 +622,7 @@ export default function ManagePage() {
         <div className="no-print" style={{ padding: '10px 12px 40px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {displayActive.length === 0 && (
             <div style={{ textAlign: 'center', padding: '48px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#b4b4b0', letterSpacing: '0.1em' }}>
-              NO GUESTS YET
+              {tagFilter || tallyFilter !== 'total' ? 'NO MATCHING GUESTS' : 'NO GUESTS YET'}
             </div>
           )}
           {displayActive.map(card => {
@@ -602,6 +659,7 @@ export default function ManagePage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.item.name}</div>
                       {card.item.isVIP && <span style={{ flexShrink: 0, border: '1px solid #ead8a3', background: '#f8f1dc', color: '#806520', borderRadius: 999, padding: '3px 8px', boxShadow: '0 2px 7px rgba(95, 71, 18, 0.1)', fontFamily: "'JetBrains Mono', monospace", fontSize: 8.5, fontWeight: 800, letterSpacing: '0.12em' }}>VIP</span>}
+                      <GuestTagBadge tag={card.item.tag} />
                     </div>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#9a9a96', marginTop: 3, letterSpacing: '0.04em' }}>{card.item.barcode}</div>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: card.item.email ? '#6a6a66' : '#b4b4b0', marginTop: 3, letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -656,7 +714,7 @@ export default function ManagePage() {
         <div className="no-print" style={{ padding: '10px 12px 40px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {displayRemoved.length === 0 && (
             <div style={{ textAlign: 'center', padding: '48px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#b4b4b0', letterSpacing: '0.1em' }}>
-              NO REMOVED GUESTS
+              {tagFilter ? 'NO MATCHING REMOVED GUESTS' : 'NO REMOVED GUESTS'}
             </div>
           )}
           {displayRemoved.map(card => (
@@ -665,6 +723,7 @@ export default function ManagePage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#6a6a66' }}>{card.item.name}</div>
                   {card.item.isVIP && <span style={{ flexShrink: 0, border: '1px solid #ead8a3', borderRadius: 999, padding: '3px 8px', background: '#f8f1dc', color: '#806520', fontFamily: "'JetBrains Mono', monospace", fontSize: 8.5, fontWeight: 800, letterSpacing: '0.12em' }}>VIP</span>}
+                  <GuestTagBadge tag={card.item.tag} />
                 </div>
                 <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#b4b4b0', marginTop: 3, letterSpacing: '0.04em' }}>{card.item.barcode}</div>
               </div>
@@ -752,6 +811,7 @@ export default function ManagePage() {
         <GuestEditSheet
           sessionId={sessionId}
           item={editTarget.item}
+          tagSuggestions={tagOptions}
           onClose={() => setEditTarget(null)}
           onSaved={handleEditSaved}
         />
@@ -834,6 +894,19 @@ export default function ManagePage() {
               disabled={adding}
               style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 10, padding: '12px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }}
             />
+            <label htmlFor="add-guest-tag" style={{ display: 'block', margin: '14px 0 6px', fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em', color: '#777773' }}>TAG</label>
+            <input
+              id="add-guest-tag"
+              value={addTag}
+              onChange={event => { setAddTag(event.target.value); setAddError(null); }}
+              placeholder="Tag optional"
+              list="add-guest-tag-suggestions"
+              disabled={adding}
+              style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 10, padding: '12px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }}
+            />
+            <datalist id="add-guest-tag-suggestions">
+              {tagOptions.map(tag => <option key={guestTagKey(tag)} value={tag} />)}
+            </datalist>
             <div style={{ marginTop: 14 }}>
               <VipToggle checked={addIsVIP} onChange={setAddIsVIP} disabled={adding} />
             </div>
