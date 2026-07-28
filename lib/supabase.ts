@@ -151,7 +151,7 @@ export const db = {
     return data;
   },
 
-  async createItems(items: { barcode: string; name: string; email?: string | null; tag?: string | null; isVIP?: boolean }[], sessionId: string) {
+  async createItems(items: { barcode: string; name: string; email?: string | null; tag?: string | null; isVIP?: boolean; isStaff?: boolean }[], sessionId: string) {
     const client = getClient();
     const BATCH_SIZE = 100;
     const results = [];
@@ -227,7 +227,7 @@ export const db = {
     const name = input.name.trim();
     const email = input.email?.trim() || null;
     const tag = normalizeGuestTag(input.tag);
-    const ticketDetailsChanged = current.name !== name || current.email !== email || current.isVIP !== input.isVIP;
+    const ticketDetailsChanged = current.name !== name || current.email !== email || current.isVIP !== input.isVIP || current.isStaff !== input.isStaff;
     if (!ticketDetailsChanged && current.tag === tag) return current;
 
     const patch: Record<string, string | boolean | null> = {
@@ -235,6 +235,7 @@ export const db = {
       email,
       tag,
       isVIP: input.isVIP,
+      isStaff: input.isStaff,
     };
     if (ticketDetailsChanged) {
       patch.qr_email_sent_at = null;
@@ -251,6 +252,25 @@ export const db = {
       .maybeSingle();
     if (error) throw error;
     return data as Item | null;
+  },
+
+  async updateItemsTag(sessionId: string, itemIds: string[], tag: string | null): Promise<Item[]> {
+    if (itemIds.length === 0) return [];
+    const normalizedTag = normalizeGuestTag(tag);
+    const updatedItems: Item[] = [];
+    const BATCH_SIZE = 100;
+    for (let index = 0; index < itemIds.length; index += BATCH_SIZE) {
+      const batch = itemIds.slice(index, index + BATCH_SIZE);
+      const { data, error } = await getClient()
+        .from('items')
+        .update({ tag: normalizedTag })
+        .eq('session_id', sessionId)
+        .in('id', batch)
+        .select();
+      if (error) throw error;
+      updatedItems.push(...((data || []) as Item[]));
+    }
+    return updatedItems;
   },
 
   async replaceItemTicketCode(
@@ -308,10 +328,10 @@ export const db = {
     return data as AdmissionResult;
   },
 
-  async addItem(sessionId: string, name: string, barcode: string, email?: string | null, isVIP = false, tag?: string | null) {
+  async addItem(sessionId: string, name: string, barcode: string, email?: string | null, isVIP = false, tag?: string | null, isStaff = false) {
     const { data, error } = await getClient()
       .from('items')
-      .insert({ session_id: sessionId, name, barcode, email: email || null, tag: normalizeGuestTag(tag), isVIP, scanned: false })
+      .insert({ session_id: sessionId, name, barcode, email: email || null, tag: normalizeGuestTag(tag), isVIP, isStaff, scanned: false })
       .select()
       .single();
     if (error) throw error;
@@ -452,4 +472,31 @@ export const db = {
     channel.on('broadcast', { event: 'signal' }, ({ payload }) => onSignal(payload));
     return channel;
   },
+
+  async publishPeerSignal(sessionId: string, signal: { id: string; type: 'hello' | 'offer' | 'answer'; from: string; to?: string; signal?: unknown }) {
+    const { error } = await getClient().from('peer_signals').insert({
+      signal_id: signal.id,
+      session_id: sessionId,
+      sender_id: signal.from,
+      recipient_id: signal.to || null,
+      kind: signal.type,
+      payload: signal.signal || null,
+    });
+    if (error) throw error;
+  },
+
+  async listPeerSignals(sessionId: string, deviceId: string, since: string) {
+    const { data, error } = await getClient()
+      .from('peer_signals')
+      .select('signal_id,sender_id,recipient_id,kind,payload,created_at')
+      .eq('session_id', sessionId)
+      .neq('sender_id', deviceId)
+      .or(`recipient_id.is.null,recipient_id.eq.${deviceId}`)
+      .gte('created_at', since)
+      .order('created_at', { ascending: true })
+      .limit(100);
+    if (error) throw error;
+    return data || [];
+  },
+
 };

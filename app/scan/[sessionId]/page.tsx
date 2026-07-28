@@ -11,7 +11,8 @@ import { ResultFlood, ScanResultFlood } from '@/components/ResultFlood';
 import { CheckInSource, ScanResult } from '@/lib/types';
 import { admitKnownItem, flushAdmissions } from '@/lib/admission';
 import { offlineScanner, type PreparedScanner } from '@/lib/offlineScanner';
-import { PeerSync, type PeerState } from '@/lib/peerSync';
+import { PeerSync, type PeerSignalState, type PeerState } from '@/lib/peerSync';
+import { QrOfflineSyncSheet } from '@/components/QrOfflineSyncSheet';
 
 type UndoCandidate = { itemId: string; name: string; barcode: string; scannedAt: string; source: CheckInSource };
 
@@ -65,9 +66,12 @@ export default function ScannerPage() {
   const [pendingSync, setPendingSync] = useState(0);
   const [conflicts, setConflicts] = useState<Awaited<ReturnType<typeof offlineScanner.conflicts>>>([]);
   const [offlineMessage, setOfflineMessage] = useState('');
+  const [preparing, setPreparing] = useState(false);
   const [offlineSettingsOpen, setOfflineSettingsOpen] = useState(false);
+  const [qrSyncOpen, setQrSyncOpen] = useState(false);
   const peerSyncRef = useRef<PeerSync | null>(null);
   const [peerState, setPeerState] = useState<PeerState>('idle');
+  const [peerSignalState, setPeerSignalState] = useState<PeerSignalState>('idle');
   const [pairingCode, setPairingCode] = useState('');
   const [peerCode, setPeerCode] = useState('');
   const [pairingMessage, setPairingMessage] = useState('');
@@ -121,6 +125,7 @@ export default function ScannerPage() {
   useEffect(() => {
     const peer = new PeerSync(sessionId, {
       onState: setPeerState,
+      onSignalState: setPeerSignalState,
       onAdmission: entry => {
         void (async () => {
           const applied = await offlineScanner.applyPeerAdmission(entry);
@@ -210,6 +215,7 @@ export default function ScannerPage() {
           ? 'Entered earlier · This gate'
           : 'Code ' + (result.item?.barcode ?? '—'),
       isVIP: result.item?.isVIP,
+      isStaff: result.item?.isStaff,
     });
   }, [setLastScan, updateItem, showFlood, startUndoWindow]);
 
@@ -284,12 +290,14 @@ export default function ScannerPage() {
 
   const handlePrepare = async () => {
     if (!navigator.onLine) { setOfflineMessage('Reconnect before preparing this scanner.'); return; }
+    setPreparing(true); setOfflineMessage('Saving this event to this device…');
     try {
       const [session, items] = await Promise.all([db.getSession(sessionId), db.getItems(sessionId)]);
       const snapshot = await offlineScanner.prepare(session, items);
-      setPrepared(snapshot); setOfflineMessage(`Prepared ${new Date(snapshot.preparedAt).toLocaleTimeString()}`);
+      setPrepared(snapshot); setOfflineMessage(`Offline ready · Guest list saved at ${new Date(snapshot.preparedAt).toLocaleTimeString()}`);
       if ('serviceWorker' in navigator) await navigator.serviceWorker.ready;
     } catch { setOfflineMessage('Could not prepare offline data. Check your connection.'); }
+    finally { setPreparing(false); }
   };
 
   const handleClearOffline = async () => {
@@ -304,8 +312,16 @@ export default function ScannerPage() {
     finally { setPairingBusy(false); }
   };
   const joinNearbyGates = () => {
+    if (!navigator.onLine) {
+      setPairingMessage('Reconnect to the internet to discover nearby gates. A direct connection can continue after pairing.');
+      return;
+    }
     peerSyncRef.current?.startAutoPairing();
-    setPairingMessage('Looking for another prepared scanner on this event…');
+    setPairingMessage('');
+  };
+  const stopNearbyGates = () => {
+    peerSyncRef.current?.cancelAutoPairing();
+    setPairingMessage('Nearby-gate search stopped.');
   };
   const replyToPairing = async () => {
     setPairingBusy(true); setPairingMessage('');
@@ -323,6 +339,11 @@ export default function ScannerPage() {
     try { await navigator.clipboard.writeText(pairingCode); setPairingMessage('Pairing code copied.'); }
     catch { setPairingMessage('Copy the code manually.'); }
   };
+  const handleQrImported = useCallback(async () => {
+    const snapshot = await offlineScanner.get(sessionId);
+    if (snapshot) setItems(snapshot.items as any);
+    await refreshOfflineStatus();
+  }, [refreshOfflineStatus, sessionId, setItems]);
 
   if (loading) {
     return (
@@ -335,8 +356,8 @@ export default function ScannerPage() {
   const showPanel = panelOpen || listFull;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#000', display: 'flex', justifyContent: 'center', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
-      <div style={{ position: 'relative', width: '100%', maxWidth: 480, height: '100vh', background: '#fbfbfa', color: '#161618', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: '#fbfbfa', display: 'flex', justifyContent: 'center', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+      <div style={{ position: 'relative', width: '100%', maxWidth: 1280, height: '100vh', background: '#fbfbfa', color: '#161618', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
         {/* Top bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 16px 14px', borderBottom: '1px solid #ececea', flexShrink: 0 }}>
@@ -364,8 +385,8 @@ export default function ScannerPage() {
           </div>
         </div>
 
-        {/* Camera hero — collapsed (not unmounted) when list is fullscreen */}
-        <Scanner sessionId={sessionId} onScanComplete={handleScanComplete} onScanStart={handleCameraScanStart} onBarcode={(barcode) => admit(barcode, 'camera')} hidden={listFull} />
+        {/* QR sync needs exclusive camera access, so the ticket scanner is paused while it is open. */}
+        {!qrSyncOpen && <Scanner sessionId={sessionId} onScanComplete={handleScanComplete} onScanStart={handleCameraScanStart} onBarcode={(barcode) => admit(barcode, 'camera')} hidden={listFull} />}
 
         {!flood && (undoCandidate || undoMessage) && (
           <div role="status" aria-live="polite" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: undoMessage ? '#f4f4f2' : 'oklch(0.96 0.04 152)', borderBottom: '1px solid #e2e2de' }}>
@@ -452,13 +473,25 @@ export default function ScannerPage() {
                 <button type="button" onClick={() => setOfflineSettingsOpen(false)} aria-label="Close offline scanner settings" style={{ width: 32, height: 32, border: '1px solid #e2e2de', borderRadius: 9, background: '#fff', fontSize: 18, cursor: 'pointer' }}>×</button>
               </div>
 
-              <div style={{ border: '1px solid #e2e2de', borderRadius: 12, background: '#fff', padding: 13, marginTop: 20 }}>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>Prepare this device</div>
+              <div style={{ border: `1px solid ${prepared ? '#b9dbc6' : '#e2e2de'}`, borderRadius: 12, background: prepared ? 'oklch(0.975 0.025 152)' : '#fff', padding: 13, marginTop: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>{prepared ? 'Offline ready' : 'Prepare this device'}</div>
+                  {prepared && <div style={{ color: '#287a49', fontSize: 12, fontWeight: 800 }}>✓ SAVED</div>}
+                </div>
                 <div style={{ marginTop: 4, color: '#777773', fontSize: 12.5, lineHeight: 1.45 }}>Downloads this event&apos;s guest list so this scanner can continue checking in guests without a connection.</div>
-                <button type="button" onClick={handlePrepare} style={{ width: '100%', height: 42, marginTop: 11, border: 'none', borderRadius: 9, background: prepared ? '#287a49' : '#161618', color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>{prepared ? 'Ready for offline · Refresh list' : 'Prepare for offline'}</button>
-                {prepared && <div style={{ color: '#777', marginTop: 9, fontSize: 12 }}>Prepared {new Date(prepared.preparedAt).toLocaleString()} · scanner guest list only</div>}
-                {offlineMessage && <div role="status" style={{ color: '#555', marginTop: 9, fontSize: 12 }}>{offlineMessage}</div>}
+                <button type="button" onClick={handlePrepare} disabled={preparing} style={{ width: '100%', height: 42, marginTop: 11, border: 'none', borderRadius: 9, background: preparing ? '#d8d8d4' : prepared ? '#287a49' : '#161618', color: preparing ? '#6a6a66' : '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: preparing ? 'default' : 'pointer' }}>{preparing ? 'Saving offline guest list…' : prepared ? 'Offline ready ✓ · Refresh list' : 'Prepare for offline'}</button>
+                {prepared && <div style={{ color: '#287a49', marginTop: 9, fontSize: 12, fontWeight: 600 }}>Saved {new Date(prepared.preparedAt).toLocaleString()} · this device can scan without internet</div>}
+                {offlineMessage && <div role="status" aria-live="polite" style={{ color: prepared ? '#287a49' : '#555', marginTop: 9, fontSize: 12, fontWeight: prepared ? 600 : 400 }}>{offlineMessage}</div>}
               </div>
+
+              {prepared && <div style={{ border: '1px solid #b9cfe8', borderRadius: 12, background: 'oklch(0.975 0.018 245)', padding: 13, marginTop: 9 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>Sync with QR</div>
+                  <div style={{ color: '#356a9a', fontSize: 12, fontWeight: 800 }}>FULLY OFFLINE</div>
+                </div>
+                <div style={{ marginTop: 4, color: '#777773', fontSize: 12.5, lineHeight: 1.45 }}>Exchange queued check-ins with another prepared scanner. No internet, Wi-Fi, or hotspot is required.</div>
+                <button type="button" onClick={() => { setOfflineSettingsOpen(false); setQrSyncOpen(true); }} style={{ width: '100%', height: 42, marginTop: 11, border: 'none', borderRadius: 9, background: '#356a9a', color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>Open QR sync</button>
+              </div>}
 
               {prepared && <div style={{ border: '1px solid #e2e2de', borderRadius: 12, background: '#fff', padding: 13, marginTop: 9 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -467,7 +500,9 @@ export default function ScannerPage() {
                 </div>
                 <div style={{ marginTop: 4, color: '#777773', fontSize: 12.5, lineHeight: 1.45 }}>Join another prepared scanner on this event to share check-ins directly. Server reconciliation remains final.</div>
                 {peerState !== 'connected' && <>
-                  <button type="button" onClick={joinNearbyGates} disabled={pairingBusy || peerState === 'pairing'} style={{ width: '100%', height: 42, marginTop: 11, border: 'none', borderRadius: 9, background: peerState === 'pairing' ? '#d8d8d4' : '#161618', color: peerState === 'pairing' ? '#6a6a66' : '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: pairingBusy || peerState === 'pairing' ? 'default' : 'pointer' }}>{peerState === 'pairing' ? 'Looking for nearby gates…' : 'Join nearby gates'}</button>
+                  <button type="button" onClick={joinNearbyGates} disabled={pairingBusy || peerState === 'pairing'} style={{ width: '100%', height: 42, marginTop: 11, border: 'none', borderRadius: 9, background: peerState === 'pairing' ? '#d8d8d4' : '#161618', color: peerState === 'pairing' ? '#6a6a66' : '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: pairingBusy || peerState === 'pairing' ? 'default' : 'pointer' }}>{peerState === 'pairing' ? peerSignalState === 'ready' ? 'Waiting for another scanner…' : peerSignalState === 'retrying' ? 'Reconnecting to gate network…' : 'Connecting to gate network…' : peerState === 'failed' ? 'Try nearby gates again' : 'Join nearby gates'}</button>
+                  {peerState === 'pairing' && <div role="status" aria-live="polite" style={{ marginTop: 10, borderRadius: 9, background: peerSignalState === 'retrying' ? 'oklch(0.96 0.04 80)' : '#f0f0ed', padding: '10px 11px', fontSize: 12, lineHeight: 1.4, color: peerSignalState === 'retrying' ? '#6a5415' : '#555' }}><strong style={{ color: peerSignalState === 'retrying' ? '#6a5415' : '#161618' }}>{peerSignalState === 'ready' ? 'Gate network connected.' : peerSignalState === 'retrying' ? 'Gate network interrupted; retrying automatically.' : 'Connecting to the gate network.'}</strong> {peerSignalState === 'ready' ? 'Open Nearby gates on another prepared scanner for automatic pairing.' : 'Keep this scanner online while discovery starts.'}<button type="button" onClick={stopNearbyGates} style={{ display: 'block', marginTop: 8, border: 0, background: 'transparent', color: '#555', fontSize: 12, fontWeight: 700, padding: 0, textDecoration: 'underline', cursor: 'pointer' }}>Stop searching</button></div>}
+                  {peerState === 'failed' && <div role="alert" style={{ marginTop: 10, borderRadius: 9, background: 'oklch(0.96 0.04 80)', padding: '10px 11px', fontSize: 12, lineHeight: 1.4, color: '#6a5415' }}><strong>The direct peer connection ended.</strong> Try nearby gates again or use manual pairing.</div>}
                   <details style={{ marginTop: 12 }}>
                     <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#555' }}>Pair manually instead</summary>
                     <button type="button" onClick={beginPairing} disabled={pairingBusy} style={{ width: '100%', height: 38, marginTop: 10, border: '1px solid #d7d7d3', borderRadius: 8, background: '#fff', color: '#161618', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: pairingBusy ? 'default' : 'pointer' }}>{pairingBusy ? 'Working…' : 'Create pairing code'}</button>
@@ -497,6 +532,7 @@ export default function ScannerPage() {
             </section>
           </div>
         )}
+        {qrSyncOpen && <QrOfflineSyncSheet sessionId={sessionId} onImported={handleQrImported} onClose={() => setQrSyncOpen(false)} />}
       </div>
     </div>
   );

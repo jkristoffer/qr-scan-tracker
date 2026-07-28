@@ -179,7 +179,13 @@ export async function renderTicketPassImage(
   context.clip();
   context.fillStyle = cardFill;
   context.fillRect(45, 35, 990, 1280);
-  if (item.isVIP) {
+  if (item.isStaff) {
+    const staffHeaderGradient = context.createLinearGradient(230, -150, 850, 470);
+    staffHeaderGradient.addColorStop(0, '#172554');
+    staffHeaderGradient.addColorStop(0.55, '#2563eb');
+    staffHeaderGradient.addColorStop(1, '#38bdf8');
+    context.fillStyle = staffHeaderGradient;
+  } else if (item.isVIP) {
     const vipHeaderGradient = context.createLinearGradient(230, -150, 850, 470);
     vipHeaderGradient.addColorStop(0, '#4A1F2D');
     vipHeaderGradient.addColorStop(1, '#7A3548');
@@ -210,7 +216,7 @@ export async function renderTicketPassImage(
   context.fillText('ENTRY PASS', 110, 92);
   if (item.isVIP) drawGoldenCornerRibbon(context);
 
-  const title = fittedTitle(context, eventName, item.isVIP ? 650 : 820);
+  const title = fittedTitle(context, eventName, item.isVIP || item.isStaff ? 650 : 820);
   context.font = `700 ${title.size}px Arial, Helvetica, sans-serif`;
   context.fillStyle = '#fffdf6';
   title.lines.forEach((line, index) => context.fillText(line, 110, 154 + index * (title.size + 7)));

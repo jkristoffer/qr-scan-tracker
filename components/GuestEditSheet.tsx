@@ -5,6 +5,7 @@ import { db } from '@/lib/supabase';
 import { toQrDataUrl } from '@/lib/qr';
 import { Item } from '@/lib/types';
 import { VipToggle } from '@/components/VipToggle';
+import { StaffToggle } from '@/components/StaffToggle';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -21,6 +22,7 @@ export function GuestEditSheet({ sessionId, item, tagSuggestions, onClose, onSav
   const [email, setEmail] = useState(item.email || '');
   const [tag, setTag] = useState(item.tag || '');
   const [isVIP, setIsVIP] = useState(item.isVIP);
+  const [isStaff, setIsStaff] = useState(item.isStaff);
   const [saving, setSaving] = useState(false);
   const [writeError, setWriteError] = useState('');
   const [replacing, setReplacing] = useState(false);
@@ -36,7 +38,8 @@ export function GuestEditSheet({ sessionId, item, tagSuggestions, onClose, onSav
   const detailsChanged = trimmedName !== item.name.trim()
     || trimmedEmail !== (item.email?.trim() || '')
     || trimmedTag !== (item.tag?.trim() || '')
-    || isVIP !== item.isVIP;
+    || isVIP !== item.isVIP
+    || isStaff !== item.isStaff;
   const saveDisabled = saving || !detailsChanged || Boolean(nameError || emailError);
   const trimmedCode = replacementCode.trim();
   const codeError = !trimmedCode
@@ -69,6 +72,7 @@ export function GuestEditSheet({ sessionId, item, tagSuggestions, onClose, onSav
         email: trimmedEmail || null,
         tag: trimmedTag || null,
         isVIP,
+        isStaff,
       });
       if (!updated) {
         setWriteError('Guest no longer exists. Reload Manage and try again.');
@@ -153,9 +157,10 @@ export function GuestEditSheet({ sessionId, item, tagSuggestions, onClose, onSav
         <div style={{ minHeight: 18, marginTop: 4, fontSize: 11, color: '#9a9a96' }}>Internal Manage label; it is not shown on the guest pass.</div>
         <div style={{ marginBottom: 12 }}>
           <VipToggle checked={isVIP} onChange={setIsVIP} disabled={saving} />
+          <div style={{ marginTop: 8 }}><StaffToggle checked={isStaff} onChange={setIsStaff} disabled={saving} /></div>
         </div>
         <div style={{ background: '#f0f0ed', borderRadius: 10, padding: '10px 12px', marginTop: 3, fontSize: 12, color: '#5a5a56', lineHeight: 1.45 }}>
-          Current ticket: <strong>{item.barcode}</strong>. Name, email, or VIP changes mark the pass unsent; tag-only changes do not.
+          Current ticket: <strong>{item.barcode}</strong>. Name, email, VIP, or Staff changes mark the pass unsent; tag-only changes do not.
         </div>
         {writeError && <div role="alert" style={{ background: 'oklch(0.96 0.06 32)', borderRadius: 8, padding: '9px 10px', marginTop: 10, fontSize: 12, color: 'oklch(0.48 0.16 32)' }}>{writeError}</div>}
         <button onClick={() => setReplacing(true)} disabled={saving} style={{ width: '100%', height: 46, marginTop: 12, borderRadius: 10, border: '1px solid #e2e2de', background: '#fff', color: '#161618', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer' }}>Replace ticket code</button>

@@ -5,6 +5,7 @@ export interface ScanResultFlood {
   name: string;
   sub: string;
   isVIP?: boolean;
+  isStaff?: boolean;
 }
 
 const ADMIT_COLOR  = 'oklch(0.74 0.17 152)';
@@ -68,6 +69,11 @@ export function ResultFlood({ result, onDismiss }: ResultFloodProps) {
       {result.isVIP && (
         <div style={{ marginTop: 12, border: '2px solid #ffe7a0', background: '#c6a24a', color: '#2d2208', borderRadius: 999, padding: '7px 14px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 800, letterSpacing: '0.16em' }}>
           VIP GUEST
+        </div>
+      )}
+      {result.isStaff && (
+        <div style={{ marginTop: 12, border: '2px solid #bfdbfe', background: '#2563eb', color: '#f8fbff', borderRadius: 999, padding: '7px 14px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 800, letterSpacing: '0.16em' }}>
+          STAFF GUEST
         </div>
       )}
       <div style={{ fontFamily: "'JetBrains Mono', monospace", color: 'rgba(255,255,255,0.82)', fontSize: 12, letterSpacing: '0.08em', marginTop: 9, textAlign: 'center' }}>

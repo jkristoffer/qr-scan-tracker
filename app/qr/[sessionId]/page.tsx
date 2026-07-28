@@ -76,13 +76,14 @@ export default function QRCodesPage() {
         {cards.map(({ item, dataUrl }) => (
           <div
             key={item.id}
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', border: item.isVIP ? '2px solid #eee4c9' : '1px solid #e6e6e2', background: item.isVIP ? 'linear-gradient(135deg, #fffef9 0%, #fff1bd 55%, #ebcf7a 100%)' : '#fff', boxShadow: item.isVIP ? '0 8px 22px rgba(128, 96, 30, 0.14)' : 'none', borderRadius: 14, padding: '14px 10px 12px', pageBreakInside: 'avoid', breakInside: 'avoid' }}
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', border: item.isStaff ? '2px solid #bfdbfe' : item.isVIP ? '2px solid #eee4c9' : '1px solid #e6e6e2', background: item.isStaff ? 'linear-gradient(135deg, #ffffff 0%, #dbeafe 55%, #93c5fd 100%)' : item.isVIP ? 'linear-gradient(135deg, #fffef9 0%, #fff1bd 55%, #ebcf7a 100%)' : '#fff', boxShadow: item.isStaff ? '0 8px 22px rgba(30, 64, 175, 0.14)' : item.isVIP ? '0 8px 22px rgba(128, 96, 30, 0.14)' : 'none', borderRadius: 14, padding: '14px 10px 12px', pageBreakInside: 'avoid', breakInside: 'avoid' }}
           >
             <div style={{ padding: 5, borderRadius: 10, background: '#fff' }}>
               <img src={dataUrl} alt={item.barcode} style={{ width: 130, height: 130, display: 'block' }} />
             </div>
             <div style={{ marginTop: 9, fontSize: 13, fontWeight: 600, textAlign: 'center', lineHeight: 1.3, color: '#161618' }}>{item.name}</div>
             {item.isVIP && <div style={{ marginTop: 5, borderRadius: 999, padding: '3px 8px', background: 'linear-gradient(135deg, #9b741c 0%, #d8b853 100%)', color: '#fffdf5', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 800, letterSpacing: '0.14em' }}>VIP</div>}
+            {item.isStaff && <div style={{ marginTop: 5, borderRadius: 999, padding: '3px 8px', background: 'linear-gradient(135deg, #1d4ed8 0%, #38bdf8 100%)', color: '#f8fbff', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 800, letterSpacing: '0.14em' }}>STAFF</div>}
             <div style={{ marginTop: 4, fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, color: '#9a9a96', textAlign: 'center', letterSpacing: '0.04em' }}>{item.barcode}</div>
           </div>
         ))}

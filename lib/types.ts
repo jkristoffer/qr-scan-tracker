@@ -17,6 +17,7 @@ export interface Item {
   email: string | null;
   tag: string | null;
   isVIP: boolean;
+  isStaff: boolean;
   created_at: string;
   scanned: boolean;
   scanned_at: string | null;
@@ -59,6 +60,7 @@ export interface UpdateItemDetailsInput {
   email: string | null;
   tag: string | null;
   isVIP: boolean;
+  isStaff: boolean;
 }
 
 export type ReplaceTicketCodeStatus = 'replaced' | 'stale' | 'code_unavailable' | 'not_found';

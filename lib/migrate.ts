@@ -42,6 +42,7 @@ export async function migrate(options: MigrateOptions = {}) {
         email text,
         tag text,
         "isVIP" boolean not null default false,
+        "isStaff" boolean not null default false,
         created_at timestamptz not null default now(),
         scanned boolean default false,
         scanned_at timestamptz,
@@ -55,6 +56,7 @@ export async function migrate(options: MigrateOptions = {}) {
     await sql`alter table items add column if not exists email text`;
     await sql`alter table items add column if not exists tag text`;
     await sql`alter table items add column if not exists "isVIP" boolean not null default false`;
+    await sql`alter table items add column if not exists "isStaff" boolean not null default false`;
     await sql`alter table items add column if not exists created_at timestamptz`;
     await sql`
       update items
@@ -413,6 +415,36 @@ export async function migrate(options: MigrateOptions = {}) {
         insert into admission_attempts(attempt_id,session_id,item_id,gate_name,source,captured_at,outcome,winner_attempt_id) values(p_attempt_id,p_session_id,p_item_id,coalesce(nullif(btrim(p_gate_name),''),'Gate'),p_source,p_captured_at,'conflict',v_winner.attempt_id); return jsonb_build_object('item',to_jsonb(v_item),'outcome','conflict','winnerCapturedAt',v_winner.captured_at,'winnerGateName',v_winner.gate_name);
       end; $$
     `;
+    await sql`
+      create table if not exists peer_signals (
+        signal_id uuid primary key default gen_random_uuid(),
+        session_id uuid not null references scan_sessions(id) on delete cascade,
+        sender_id uuid not null,
+        recipient_id uuid,
+        kind text not null check (kind in ('hello', 'offer', 'answer')),
+        payload jsonb,
+        created_at timestamptz not null default now()
+      )
+    `;
+    await sql`
+      create index if not exists idx_peer_signals_session_created_at
+      on peer_signals(session_id, created_at desc)
+    `;
+    await sql`alter table peer_signals enable row level security`;
+    await sql`drop policy if exists peer_signals_recent_read on peer_signals`;
+    await sql`
+      create policy peer_signals_recent_read on peer_signals
+      for select to anon, authenticated
+      using (created_at > now() - interval '5 minutes')
+    `;
+    await sql`drop policy if exists peer_signals_recent_insert on peer_signals`;
+    await sql`
+      create policy peer_signals_recent_insert on peer_signals
+      for insert to anon, authenticated
+      with check (created_at > now() - interval '1 minute')
+    `;
+    await sql`grant select, insert on peer_signals to anon, authenticated`;
+    await sql`revoke delete on peer_signals from anon, authenticated`;
     if (!schema) {
       await sql`
         alter publication supabase_realtime add table items

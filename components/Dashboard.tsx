@@ -8,6 +8,7 @@ import { allocateTicketCodes } from '@/lib/ticketCodes';
 import { ScanSession } from '@/lib/types';
 import { distinctGuestTags } from '@/lib/guestTags';
 import { VipToggle } from '@/components/VipToggle';
+import { StaffToggle } from '@/components/StaffToggle';
 import { InstallScanner } from '@/components/InstallScanner';
 
 interface EventProgress { total: number; scanned: number; }
@@ -20,6 +21,7 @@ interface GuestInput {
   email: string;
   tag: string;
   isVIP: boolean;
+  isStaff: boolean;
 }
 
 interface GuestItem {
@@ -28,9 +30,10 @@ interface GuestItem {
   email: string | null;
   tag: string | null;
   isVIP: boolean;
+  isStaff: boolean;
 }
 
-const EMPTY_UPLOAD_LABEL = { title: 'Upload guest list', sub: 'CSV barcode,name,email,isVIP,tag or TXT names' };
+const EMPTY_UPLOAD_LABEL = { title: 'Upload guest list', sub: 'CSV barcode,name,email,isStaff,tag or TXT names' };
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function parseGuestRows(text: string): GuestItem[] {
@@ -42,7 +45,7 @@ function parseGuestRows(text: string): GuestItem[] {
   const barcodeIndex = columnIndex('barcode', 0);
   const nameIndex = columnIndex('name', 1);
   const emailIndex = columnIndex('email', 2);
-  const vipIndex = columnIndex('isvip', 3);
+  const vipIndex = hasHeader ? (header.indexOf('isstaff') >= 0 ? header.indexOf('isstaff') : header.indexOf('isvip')) : 3;
   const tagIndex = columnIndex('tag', 4);
 
   return dataLines.slice(0, 500).map(ln => {
@@ -59,6 +62,7 @@ function parseGuestRows(text: string): GuestItem[] {
       email: emailRaw || null,
       tag: tagRaw || null,
       isVIP: ['true', 'yes', '1', 'vip'].includes(vipRaw?.toLowerCase()),
+      isStaff: ['true', 'yes', '1', 'staff'].includes(vipRaw?.toLowerCase()),
     };
   }).filter(item => item.barcode);
 }
@@ -75,7 +79,7 @@ export function Dashboard() {
   const [uploadLabel, setUploadLabel] = useState<{ title: string; sub: string }>(EMPTY_UPLOAD_LABEL);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [uploadedGuests, setUploadedGuests] = useState<GuestItem[]>([]);
-  const [manualGuests, setManualGuests] = useState<GuestInput[]>([{ id: 1, name: '', email: '', tag: '', isVIP: false }]);
+  const [manualGuests, setManualGuests] = useState<GuestInput[]>([{ id: 1, name: '', email: '', tag: '', isVIP: false, isStaff: false }]);
   const [creationError, setCreationError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [gateName, setGateName] = useState('');
@@ -161,17 +165,17 @@ export function Dashboard() {
   };
 
   const addManualGuest = () => {
-    setManualGuests(prev => [...prev, { id: nextManualGuestId.current++, name: '', email: '', tag: '', isVIP: false }]);
+    setManualGuests(prev => [...prev, { id: nextManualGuestId.current++, name: '', email: '', tag: '', isVIP: false, isStaff: false }]);
   };
 
-  const updateManualGuest = (id: number, field: 'name' | 'email' | 'tag' | 'isVIP', value: string | boolean) => {
+  const updateManualGuest = (id: number, field: 'name' | 'email' | 'tag' | 'isVIP' | 'isStaff', value: string | boolean) => {
     setManualGuests(prev => prev.map(guest => guest.id === id ? { ...guest, [field]: value } : guest));
     setCreationError(null);
   };
 
   const removeManualGuest = (id: number) => {
     setManualGuests(prev => prev.length === 1
-      ? [{ ...prev[0], name: '', email: '', tag: '', isVIP: false }]
+      ? [{ ...prev[0], name: '', email: '', tag: '', isVIP: false, isStaff: false }]
       : prev.filter(guest => guest.id !== id));
     setCreationError(null);
   };
@@ -186,6 +190,7 @@ export function Dashboard() {
       email: guest.email.trim() || null,
       tag: guest.tag.trim() || null,
       isVIP: guest.isVIP,
+      isStaff: guest.isStaff,
     }));
 
     setCreating(true);
@@ -209,8 +214,8 @@ export function Dashboard() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#000', display: 'flex', justifyContent: 'center', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
-      <div style={{ position: 'relative', width: '100%', maxWidth: 480, minHeight: '100vh', background: '#fbfbfa', color: '#161618', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: '#fbfbfa', display: 'flex', justifyContent: 'center', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+      <div style={{ position: 'relative', width: '100%', maxWidth: 1280, minHeight: '100vh', background: '#fbfbfa', color: '#161618', display: 'flex', flexDirection: 'column' }}>
 
         {/* Header */}
         <div style={{ padding: '26px 22px 18px', borderBottom: '1px solid #ececea', flexShrink: 0 }}>
@@ -466,6 +471,9 @@ export function Dashboard() {
                           checked={guest.isVIP}
                           onChange={checked => updateManualGuest(guest.id, 'isVIP', checked)}
                         />
+                        <div style={{ marginTop: 8 }}>
+                          <StaffToggle checked={guest.isStaff} onChange={checked => updateManualGuest(guest.id, 'isStaff', checked)} />
+                        </div>
                       </div>
                     </div>
                   );

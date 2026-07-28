@@ -17,6 +17,7 @@ export interface QrTicketEmailProps {
   barcode: string;
   contentId: string;
   isVIP: boolean;
+  isStaff: boolean;
 }
 
 export function QrTicketEmail({
@@ -25,6 +26,7 @@ export function QrTicketEmail({
   barcode,
   contentId,
   isVIP,
+  isStaff,
 }: QrTicketEmailProps) {
   return (
     <Html lang="en" dir="ltr">
@@ -32,8 +34,8 @@ export function QrTicketEmail({
       <Preview>{guestName}, your QR entry pass for {eventName} is ready.</Preview>
       <Body style={body}>
         <Container style={shell}>
-          <Section style={header}>
-            <Text style={eyebrow}>{isVIP ? 'VIP ENTRY PASS' : 'ENTRY PASS'}</Text>
+          <Section style={{ ...header, ...(isStaff ? staffHeader : {}) }}>
+            <Text style={eyebrow}>{isStaff ? 'STAFF ENTRY PASS' : isVIP ? 'VIP ENTRY PASS' : 'ENTRY PASS'}</Text>
             <Heading style={eventHeading}>{eventName}</Heading>
             <Text style={preparedFor}>Prepared for {guestName}</Text>
           </Section>
@@ -44,7 +46,7 @@ export function QrTicketEmail({
               Your entry pass is ready. Present the QR code below when you arrive at check-in.
             </Text>
 
-            <Section style={{ ...ticket, ...(isVIP ? vipTicket : {}) }}>
+            <Section style={{ ...ticket, ...(isVIP ? vipTicket : {}), ...(isStaff ? staffTicket : {}) }}>
               <Text style={ticketLabel}>SCAN AT CHECK-IN</Text>
               <Img
                 src={`cid:${contentId}`}
@@ -102,6 +104,11 @@ const header = {
   backgroundColor: '#161618',
   borderRadius: '18px 18px 0 0',
   padding: '34px 36px 32px',
+};
+
+const staffHeader = {
+  backgroundColor: '#2563eb',
+  backgroundImage: 'linear-gradient(135deg, #172554 0%, #2563eb 55%, #38bdf8 100%)',
 };
 
 const eyebrow = {
@@ -185,6 +192,13 @@ const vipTicket = {
   backgroundImage: 'linear-gradient(135deg, #fffef9 0%, #fff2c4 54%, #ebcf7a 100%)',
   border: '2px solid #eee4c9',
   boxShadow: '0 9px 24px rgba(128, 96, 30, 0.14)',
+};
+
+const staffTicket = {
+  backgroundColor: '#eff6ff',
+  backgroundImage: 'linear-gradient(135deg, #ffffff 0%, #dbeafe 54%, #93c5fd 100%)',
+  border: '2px solid #bfdbfe',
+  boxShadow: '0 9px 24px rgba(30, 64, 175, 0.14)',
 };
 
 const codeLabel = {

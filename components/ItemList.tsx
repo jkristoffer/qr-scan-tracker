@@ -53,7 +53,7 @@ export function ItemList({ onManualCheckIn, pendingItemId, failedItemId, admissi
               display: 'flex', alignItems: 'center', gap: 13,
               padding: '16px 16px',
               background: isFlash ? 'color-mix(in oklch, oklch(0.74 0.17 152) 14%, white)' : '#ffffff',
-              border: item.isVIP
+              border: item.isVIP || item.isStaff
                 ? '1px solid #eee4c9'
                 : `1px solid ${isFlash ? 'oklch(0.74 0.17 152)' : '#ededea'}`,
               boxShadow: 'none',
@@ -80,6 +80,7 @@ export function ItemList({ onManualCheckIn, pendingItemId, failedItemId, admissi
                   {item.name}
                 </div>
                 {item.isVIP && <span style={{ flexShrink: 0, border: '1px solid #f7e5ae', background: 'linear-gradient(135deg, #9b741c 0%, #d8b853 100%)', color: '#fffdf5', borderRadius: 999, padding: '3px 8px', fontFamily: "'JetBrains Mono', monospace", fontSize: 8.5, fontWeight: 800, letterSpacing: '0.12em' }}>VIP</span>}
+                {item.isStaff && <span style={{ flexShrink: 0, border: '1px solid #9cc7e8', background: 'linear-gradient(135deg, #1d4ed8 0%, #38bdf8 100%)', color: '#f8fbff', borderRadius: 999, padding: '3px 8px', fontFamily: "'JetBrains Mono', monospace", fontSize: 8.5, fontWeight: 800, letterSpacing: '0.12em' }}>STAFF</span>}
               </div>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#9a9a96', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {isIn

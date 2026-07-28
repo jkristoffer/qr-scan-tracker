@@ -14,9 +14,6 @@ interface ManageSecuritySheetProps {
   onSendUnsent: () => void;
   sendingUnsent: boolean;
   emailSummary: string | null;
-  onDownloadPasses: () => void;
-  downloadProgress: number | null;
-  downloadError: string | null;
   onArchive: () => void;
   archiving: boolean;
   onClose: () => void;
@@ -33,9 +30,6 @@ export function ManageSecuritySheet({
   onSendUnsent,
   sendingUnsent,
   emailSummary,
-  onDownloadPasses,
-  downloadProgress,
-  downloadError,
   onArchive,
   archiving,
   onClose,
@@ -184,22 +178,6 @@ export function ManageSecuritySheet({
             {sendingUnsent ? 'Sending…' : 'Send unsent'}
           </button>
           {emailSummary && <div role="status" style={{ marginTop: 8, fontSize: 12, color: '#686864', lineHeight: 1.4 }}>{emailSummary}</div>}
-        </div>
-
-        <div style={{ border: '1px solid #e2e2de', borderRadius: 12, background: '#fff', padding: 13, marginTop: 9 }}>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>Download passes</div>
-          <div style={{ marginTop: 4, color: '#777773', fontSize: 12.5, lineHeight: 1.45 }}>
-            Creates a ZIP of ready-to-share QR ticket images for every active guest.
-          </div>
-          <button
-            type="button"
-            onClick={onDownloadPasses}
-            disabled={downloadProgress !== null || activeGuestCount === 0}
-            style={{ width: '100%', height: 42, marginTop: 11, border: '1px solid #d7d7d3', borderRadius: 9, background: '#fff', color: downloadProgress !== null || activeGuestCount === 0 ? '#a0a09b' : '#161618', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: downloadProgress !== null || activeGuestCount === 0 ? 'default' : 'pointer' }}
-          >
-            {downloadProgress === null ? 'Download passes' : `Preparing ${downloadProgress}/${activeGuestCount}`}
-          </button>
-          {downloadError && <div role="alert" style={{ marginTop: 8, fontSize: 12, color: '#b42318' }}>{downloadError}</div>}
         </div>
 
         <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '22px 0 8px' }}>CHANGE MANAGE PIN</div>
