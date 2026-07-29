@@ -144,6 +144,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 /** Renders the same printable entry-pass template used for an individual guest. */
 export async function renderTicketPassImage(
   eventName: string,
+  registrationAt: string | null,
+  venue: string | null,
   item: Item,
   qrDataUrl: string,
   format: 'image/jpeg' | 'image/png' = 'image/jpeg',
@@ -247,8 +249,12 @@ export async function renderTicketPassImage(
   context.imageSmoothingEnabled = false;
   context.drawImage(qrImage, 230, 450, 620, 620);
 
-  drawEventDetail(context, 'WHEN', 'Sunday, 2 August 2026', '4:00 PM–6:00 PM  ·  Registration 3:15 PM', 110, 1128, 405);
-  drawEventDetail(context, 'WHERE', 'National Museum of Singapore', 'Gallery Theatre', 550, 1128, 420);
+  const registrationDate = registrationAt ? new Date(registrationAt) : null;
+  const validRegistrationDate = registrationDate && Number.isFinite(registrationDate.getTime()) ? registrationDate : null;
+  const dateLabel = validRegistrationDate ? validRegistrationDate.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'Date to be announced';
+  const timeLabel = validRegistrationDate ? validRegistrationDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : 'Registration time to be announced';
+  drawEventDetail(context, 'WHEN', dateLabel, timeLabel, 110, 1128, 405);
+  drawEventDetail(context, 'WHERE', venue || 'Venue to be announced', '', 550, 1128, 420);
 
   context.drawImage(logoImage, 455, 1248, 170, 40);
 

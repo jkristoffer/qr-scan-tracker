@@ -6,6 +6,8 @@ import type { Item } from '@/lib/types';
 
 interface QrPostcardSheetProps {
   eventName: string;
+  registrationAt: string | null;
+  venue: string | null;
   item: Item;
   qrDataUrl: string;
   onClose: () => void;
@@ -25,7 +27,7 @@ function postcardFilename(eventName: string, guestName: string) {
   return `${stem || 'qr-entry-pass'}.png`;
 }
 
-export function QrPostcardSheet({ eventName, item, qrDataUrl, onClose }: QrPostcardSheetProps) {
+export function QrPostcardSheet({ eventName, registrationAt, venue, item, qrDataUrl, onClose }: QrPostcardSheetProps) {
   const [asset, setAsset] = useState<PostcardAsset | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -39,7 +41,7 @@ export function QrPostcardSheet({ eventName, item, qrDataUrl, onClose }: QrPostc
     setError('');
     setMessage('');
 
-    void renderTicketPassImage(eventName, item, qrDataUrl, 'image/png')
+    void renderTicketPassImage(eventName, registrationAt, venue, item, qrDataUrl, 'image/png')
       .then(blob => {
         if (cancelled) return;
         objectUrl = URL.createObjectURL(blob);
@@ -53,7 +55,7 @@ export function QrPostcardSheet({ eventName, item, qrDataUrl, onClose }: QrPostc
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [eventName, item, qrDataUrl]);
+  }, [eventName, registrationAt, venue, item, qrDataUrl]);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;

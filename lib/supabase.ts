@@ -10,7 +10,7 @@ import type { AdmissionInput, AdmissionResult } from './admission';
 import { normalizeGuestTag } from './guestTags';
 
 let _client: SupabaseClient | null = null;
-const SESSION_COLUMNS = 'id,name,created_at,archived';
+const SESSION_COLUMNS = 'id,name,registration_at,venue,created_at,archived';
 const MANAGE_SESSION_COLUMNS = `${SESSION_COLUMNS},manage_password_hash`;
 
 function getClient(): SupabaseClient {
@@ -24,10 +24,10 @@ function getClient(): SupabaseClient {
 }
 
 export const db = {
-  async createSession(name: string, managePasswordHash: string) {
+  async createSession(name: string, managePasswordHash: string, registrationAt: string | null, venue: string | null) {
     const { data, error } = await getClient()
       .from('scan_sessions')
-      .insert({ name, manage_password_hash: managePasswordHash })
+      .insert({ name, manage_password_hash: managePasswordHash, registration_at: registrationAt, venue })
       .select(SESSION_COLUMNS)
       .single();
     if (error) throw error;
@@ -82,6 +82,17 @@ export const db = {
     const { data, error } = await getClient()
       .from('scan_sessions')
       .update({ name })
+      .eq('id', id)
+      .select(MANAGE_SESSION_COLUMNS)
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async updateEventDetails(id: string, registrationAt: string | null, venue: string | null) {
+    const { data, error } = await getClient()
+      .from('scan_sessions')
+      .update({ registration_at: registrationAt, venue })
       .eq('id', id)
       .select(MANAGE_SESSION_COLUMNS)
       .single();

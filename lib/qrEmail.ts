@@ -24,13 +24,16 @@ export function renderQrEmail(session: ScanSession, item: Item): QrEmailContent 
   return {
     subject: `Your entry pass for ${eventName}`,
     contentId,
-    react: QrTicketEmail({ eventName, guestName: name, barcode, contentId, isVIP: item.isVIP, isStaff: item.isStaff }),
+    react: QrTicketEmail({ eventName, registrationAt: session.registration_at, venue: session.venue, guestName: name, barcode, contentId, isVIP: item.isVIP, isStaff: item.isStaff }),
     text: [
       `Your entry pass for ${eventName}`,
       '',
       `Hi ${name},`,
       '',
       'Your entry pass is ready. Present the attached QR code when you arrive at check-in.',
+      '',
+      `Registration: ${session.registration_at ? new Date(session.registration_at).toLocaleString() : 'Date and time to be announced'}`,
+      `Venue: ${session.venue || 'To be announced'}`,
       '',
       `Ticket code: ${barcode}`,
       '',

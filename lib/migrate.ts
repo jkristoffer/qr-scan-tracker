@@ -24,7 +24,9 @@ export async function migrate(options: MigrateOptions = {}) {
         name text not null,
         created_at timestamptz default now(),
         archived boolean default false,
-        manage_password_hash text
+        manage_password_hash text,
+        registration_at timestamptz,
+        venue text
       )
     `;
     await sql`
@@ -32,6 +34,12 @@ export async function migrate(options: MigrateOptions = {}) {
     `;
     await sql`
       alter table scan_sessions add column if not exists manage_password_hash text
+    `;
+    await sql`
+      alter table scan_sessions add column if not exists registration_at timestamptz
+    `;
+    await sql`
+      alter table scan_sessions add column if not exists venue text
     `;
     await sql`
       create table if not exists items (

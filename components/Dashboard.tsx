@@ -74,6 +74,8 @@ export function Dashboard() {
   const [progress, setProgress] = useState<Record<string, EventProgress>>({});
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState('');
+  const [newRegistrationAt, setNewRegistrationAt] = useState('');
+  const [newVenue, setNewVenue] = useState('');
   const [newManagePin, setNewManagePin] = useState('');
   const [confirmManagePin, setConfirmManagePin] = useState('');
   const [uploadLabel, setUploadLabel] = useState<{ title: string; sub: string }>(EMPTY_UPLOAD_LABEL);
@@ -197,7 +199,7 @@ export function Dashboard() {
     setCreationError(null);
     try {
       const managePasswordHash = await hashManagePin(newManagePin);
-      const session = await db.createSession(name, managePasswordHash);
+      const session = await db.createSession(name, managePasswordHash, newRegistrationAt ? new Date(newRegistrationAt).toISOString() : null, newVenue.trim() || null);
       if (uploadedGuests.length > 0) await db.createItems(uploadedGuests, session.id);
       if (manualItems.length > 0) await db.createItems(manualItems, session.id);
       router.push(`/scan/${session.id}`);
@@ -365,6 +367,24 @@ export function Dashboard() {
                 style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 12, padding: '15px 14px', fontSize: 16, fontFamily: "'Helvetica Neue', Helvetica, sans-serif", outline: 'none' }}
                 onFocus={e => (e.target.style.borderColor = '#161618')}
                 onBlur={e => (e.target.style.borderColor = '#dcdcd8')}
+              />
+
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>REGISTRATION DATE / TIME</div>
+              <input
+                type="datetime-local"
+                value={newRegistrationAt}
+                onChange={e => setNewRegistrationAt(e.target.value)}
+                aria-label="Registration date and time"
+                style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 12, padding: '15px 14px', fontSize: 16, fontFamily: 'inherit', outline: 'none' }}
+              />
+
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>EVENT VENUE</div>
+              <input
+                value={newVenue}
+                onChange={e => setNewVenue(e.target.value)}
+                placeholder="e.g. Gallery Theatre"
+                aria-label="Event venue"
+                style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 12, padding: '15px 14px', fontSize: 16, fontFamily: 'inherit', outline: 'none' }}
               />
 
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>MANAGE PIN</div>

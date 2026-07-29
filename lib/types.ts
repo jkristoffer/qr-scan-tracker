@@ -1,6 +1,8 @@
 export interface ScanSession {
   id: string;
   name: string;
+  registration_at: string | null;
+  venue: string | null;
   created_at: string;
   archived: boolean;
 }
