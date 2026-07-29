@@ -568,7 +568,7 @@ export default function ManagePage() {
       const usedNames = new Map<string, number>();
       const entries: { name: string; data: Blob }[] = [];
       for (const [index, card] of cardsToDownload.entries()) {
-        const data = await renderTicketPassImage(session.name, session.event_date, session.registration_start, session.venue, session.venue_field2, card.item, card.dataUrl);
+        const data = await renderTicketPassImage(session.name, session.event_tagline, session.event_date, session.event_timing, session.registration_start, session.venue, session.venue_field2, card.item, card.dataUrl);
         entries.push({ name: ticketImageFilename(card.item, usedNames), data });
         setBulkDownloadProgress(index + 1);
       }
@@ -967,7 +967,9 @@ export default function ManagePage() {
       {postcardTarget && (
         <QrPostcardSheet
           eventName={session.name}
+          eventTagline={session.event_tagline}
           eventDate={session.event_date}
+          eventTiming={session.event_timing}
           registrationStart={session.registration_start}
           venue={session.venue}
           venueField2={session.venue_field2}

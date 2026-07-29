@@ -13,7 +13,9 @@ import {
 
 export interface QrTicketEmailProps {
   eventName: string;
+  eventTagline: string | null;
   eventDate: string | null;
+  eventTiming: string | null;
   registrationStart: string | null;
   venue: string | null;
   venueField2: string | null;
@@ -26,7 +28,9 @@ export interface QrTicketEmailProps {
 
 export function QrTicketEmail({
   eventName,
+  eventTagline,
   eventDate,
+  eventTiming,
   registrationStart,
   venue,
   venueField2,
@@ -45,6 +49,7 @@ export function QrTicketEmail({
           <Section style={{ ...header, ...(isStaff ? staffHeader : {}) }}>
             <Text style={eyebrow}>{isStaff ? 'STAFF ENTRY PASS' : isVIP ? 'VIP ENTRY PASS' : 'ENTRY PASS'}</Text>
             <Heading style={eventHeading}>{eventName}</Heading>
+            {eventTagline && <Text style={preparedFor}>{eventTagline}</Text>}
             <Text style={preparedFor}>Prepared for {guestName}</Text>
           </Section>
 
@@ -55,7 +60,7 @@ export function QrTicketEmail({
             </Text>
             <Text style={eventDetails}>
               {eventDate ? new Date(`${eventDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'Date to be announced'}<br />
-              Event timing to be announced · Registration {registrationStart || 'start to be announced'}<br />
+              {eventTiming || 'Event timing to be announced'} · Registration {registrationStart || 'start to be announced'}<br />
               {venue || 'Venue to be announced'}{venueField2 ? ` · ${venueField2}` : ''}
             </Text>
 

@@ -1,7 +1,9 @@
 export interface ScanSession {
   id: string;
   name: string;
+  event_tagline: string | null;
   event_date: string | null;
+  event_timing: string | null;
   registration_start: string | null;
   venue: string | null;
   venue_field2: string | null;

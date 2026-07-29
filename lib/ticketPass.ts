@@ -144,7 +144,9 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 /** Renders the same printable entry-pass template used for an individual guest. */
 export async function renderTicketPassImage(
   eventName: string,
+  eventTagline: string | null,
   eventDate: string | null,
+  eventTiming: string | null,
   registrationStart: string | null,
   venue: string | null,
   venueField2: string | null,
@@ -227,7 +229,7 @@ export async function renderTicketPassImage(
 
   context.fillStyle = '#d8c697';
   context.font = 'italic 23px Arial, Helvetica, sans-serif';
-  context.fillText('Music for a Sustainable Future', 110, 256);
+  context.fillText(clippedText(context, eventTagline || 'Music for a Sustainable Future', 820), 110, 256);
 
   context.fillStyle = GOLD;
   context.fillRect(110, 315, 52, 3);
@@ -254,7 +256,7 @@ export async function renderTicketPassImage(
   const eventDateValue = eventDate ? new Date(`${eventDate}T00:00:00`) : null;
   const validEventDate = eventDateValue && Number.isFinite(eventDateValue.getTime()) ? eventDateValue : null;
   const dateLabel = validEventDate ? validEventDate.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'Date to be announced';
-  const timingLabel = 'Event timing to be announced';
+  const timingLabel = eventTiming || 'Event timing to be announced';
   const registrationLabel = registrationStart ? `Registration ${registrationStart}` : 'Registration start to be announced';
   drawEventDetail(context, 'WHEN', dateLabel, `${timingLabel}  ·  ${registrationLabel}`, 110, 1128, 405);
   drawEventDetail(context, 'WHERE', venue || 'Venue to be announced', venueField2 || '', 550, 1128, 420);

@@ -37,7 +37,9 @@ export function ManageSecuritySheet({
   onSessionChange,
 }: ManageSecuritySheetProps) {
   const [nameDraft, setNameDraft] = useState(session.name);
+  const [eventTaglineDraft, setEventTaglineDraft] = useState(session.event_tagline || '');
   const [eventDateDraft, setEventDateDraft] = useState(session.event_date || '');
+  const [eventTimingDraft, setEventTimingDraft] = useState(session.event_timing || '');
   const [registrationStartDraft, setRegistrationStartDraft] = useState(session.registration_start || '');
   const [venueDraft, setVenueDraft] = useState(session.venue || '');
   const [venueField2Draft, setVenueField2Draft] = useState(session.venue_field2 || '');
@@ -109,9 +111,11 @@ export function ManageSecuritySheet({
     setSavingEventDetails(true);
     setEventDetailsMessage(null);
     try {
-      const updated = await db.updateEventDetails(session.id, eventDateDraft || null, registrationStartDraft.trim() || null, venueDraft.trim() || null, venueField2Draft.trim() || null);
+      const updated = await db.updateEventDetails(session.id, eventTaglineDraft.trim() || null, eventDateDraft || null, eventTimingDraft.trim() || null, registrationStartDraft.trim() || null, venueDraft.trim() || null, venueField2Draft.trim() || null);
       onSessionChange(updated);
+      setEventTaglineDraft(updated.event_tagline || '');
       setEventDateDraft(updated.event_date || '');
+      setEventTimingDraft(updated.event_timing || '');
       setRegistrationStartDraft(updated.registration_start || '');
       setVenueDraft(updated.venue || '');
       setVenueField2Draft(updated.venue_field2 || '');
@@ -161,8 +165,13 @@ export function ManageSecuritySheet({
         {!nameDraft.trim() && <div style={{ color: '#b42318', fontSize: 12, marginTop: 7 }}>Event name is required.</div>}
         {renameMessage && <div role="status" style={{ color: renameMessage.type === 'error' ? '#b42318' : 'oklch(0.45 0.14 152)', fontSize: 12.5, marginTop: 9 }}>{renameMessage.text}</div>}
 
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '22px 0 8px' }}>EVENT TAGLINE</div>
+        <input value={eventTaglineDraft} onChange={event => { setEventTaglineDraft(event.target.value); setEventDetailsMessage(null); }} placeholder="Event tagline" aria-label="Event tagline" style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 10, padding: '12px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }} />
+
         <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>EVENT DATE</div>
         <input type="date" value={eventDateDraft} onChange={event => { setEventDateDraft(event.target.value); setEventDetailsMessage(null); }} aria-label="Event date" style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 10, padding: '12px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }} />
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>EVENT TIMING</div>
+        <input value={eventTimingDraft} onChange={event => { setEventTimingDraft(event.target.value); setEventDetailsMessage(null); }} placeholder="e.g. 4:00 PM–6:00 PM" aria-label="Event timing" style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 10, padding: '12px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }} />
         <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>REGISTRATION START</div>
         <input value={registrationStartDraft} onChange={event => { setRegistrationStartDraft(event.target.value); setEventDetailsMessage(null); }} placeholder="e.g. 3:15 PM" aria-label="Registration start" style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 10, padding: '12px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }} />
         <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>EVENT VENUE</div>

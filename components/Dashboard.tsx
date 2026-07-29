@@ -74,7 +74,9 @@ export function Dashboard() {
   const [progress, setProgress] = useState<Record<string, EventProgress>>({});
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState('');
+  const [newEventTagline, setNewEventTagline] = useState('');
   const [newEventDate, setNewEventDate] = useState('');
+  const [newEventTiming, setNewEventTiming] = useState('');
   const [newRegistrationStart, setNewRegistrationStart] = useState('');
   const [newVenue, setNewVenue] = useState('');
   const [newVenueField2, setNewVenueField2] = useState('');
@@ -201,7 +203,7 @@ export function Dashboard() {
     setCreationError(null);
     try {
       const managePasswordHash = await hashManagePin(newManagePin);
-      const session = await db.createSession(name, managePasswordHash, newEventDate || null, newRegistrationStart.trim() || null, newVenue.trim() || null, newVenueField2.trim() || null);
+      const session = await db.createSession(name, managePasswordHash, newEventTagline.trim() || null, newEventDate || null, newEventTiming.trim() || null, newRegistrationStart.trim() || null, newVenue.trim() || null, newVenueField2.trim() || null);
       if (uploadedGuests.length > 0) await db.createItems(uploadedGuests, session.id);
       if (manualItems.length > 0) await db.createItems(manualItems, session.id);
       router.push(`/scan/${session.id}`);
@@ -371,8 +373,14 @@ export function Dashboard() {
                 onBlur={e => (e.target.style.borderColor = '#dcdcd8')}
               />
 
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>EVENT TAGLINE</div>
+              <input value={newEventTagline} onChange={e => setNewEventTagline(e.target.value)} placeholder="e.g. Music for a Sustainable Future" aria-label="Event tagline" style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 12, padding: '15px 14px', fontSize: 16, fontFamily: 'inherit', outline: 'none' }} />
+
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>EVENT DATE</div>
               <input type="date" value={newEventDate} onChange={e => setNewEventDate(e.target.value)} aria-label="Event date" style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 12, padding: '15px 14px', fontSize: 16, fontFamily: 'inherit', outline: 'none' }} />
+
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>EVENT TIMING</div>
+              <input value={newEventTiming} onChange={e => setNewEventTiming(e.target.value)} placeholder="e.g. 4:00 PM–6:00 PM" aria-label="Event timing" style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 12, padding: '15px 14px', fontSize: 16, fontFamily: 'inherit', outline: 'none' }} />
 
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>REGISTRATION START</div>
               <input value={newRegistrationStart} onChange={e => setNewRegistrationStart(e.target.value)} placeholder="e.g. 3:15 PM" aria-label="Registration start" style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 12, padding: '15px 14px', fontSize: 16, fontFamily: 'inherit', outline: 'none' }} />
