@@ -10,7 +10,9 @@
     "test:manage-filters": "tsx scripts/test-manage-filters.ts",
     "qr": "node scripts/generate-qr.mjs",
     "test:qr-email-live": "node scripts/test-qr-email-live.mjs",
-    "test:offline-contract": "node scripts/test-offline-contract.mjs"
+    "test:offline-contract": "node scripts/test-offline-contract.mjs",
+    "test:peer-signal-contract": "node scripts/test-peer-signal-contract.mjs",
+    "test:qr-sync-contract": "node scripts/test-qr-sync-contract.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",

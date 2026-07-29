@@ -55,7 +55,11 @@ export const offlineScanner = {
       const snapshot = await request<PreparedScanner | undefined>(tx.objectStore('snapshots').get(entry.sessionId));
       if (!snapshot) return 'unprepared';
       const item = snapshot.items.find(candidate => candidate.id === entry.itemId);
-      if (!item || item.scanned) return 'duplicate';
+      if (!item) return 'duplicate';
+      if (item.scanned) {
+        queue.put(entry);
+        return 'duplicate';
+      }
       item.scanned = true; item.scanned_at = entry.capturedAt; item.scanned_by = entry.gateName;
       tx.objectStore('snapshots').put(snapshot);
       queue.put(entry);
