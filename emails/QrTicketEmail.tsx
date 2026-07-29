@@ -13,8 +13,10 @@ import {
 
 export interface QrTicketEmailProps {
   eventName: string;
-  registrationAt: string | null;
+  eventDate: string | null;
+  registrationStart: string | null;
   venue: string | null;
+  venueField2: string | null;
   guestName: string;
   barcode: string;
   contentId: string;
@@ -24,8 +26,10 @@ export interface QrTicketEmailProps {
 
 export function QrTicketEmail({
   eventName,
-  registrationAt,
+  eventDate,
+  registrationStart,
   venue,
+  venueField2,
   guestName,
   barcode,
   contentId,
@@ -50,8 +54,9 @@ export function QrTicketEmail({
               Your entry pass is ready. Present the QR code below when you arrive at check-in.
             </Text>
             <Text style={eventDetails}>
-              Registration: {registrationAt ? new Date(registrationAt).toLocaleString() : 'Date and time to be announced'}<br />
-              Venue: {venue || 'To be announced'}
+              {eventDate ? new Date(`${eventDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'Date to be announced'}<br />
+              Event timing to be announced · Registration {registrationStart || 'start to be announced'}<br />
+              {venue || 'Venue to be announced'}{venueField2 ? ` · ${venueField2}` : ''}
             </Text>
 
             <Section style={{ ...ticket, ...(isVIP ? vipTicket : {}), ...(isStaff ? staffTicket : {}) }}>

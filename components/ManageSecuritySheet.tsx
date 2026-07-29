@@ -21,14 +21,6 @@ interface ManageSecuritySheetProps {
   onSessionChange: (session: ManageSession) => void;
 }
 
-function toLocalDateTimeInput(value: string | null): string {
-  if (!value) return '';
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return '';
-  const pad = (part: number) => String(part).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 export function ManageSecuritySheet({
   session,
   guestView,
@@ -45,8 +37,10 @@ export function ManageSecuritySheet({
   onSessionChange,
 }: ManageSecuritySheetProps) {
   const [nameDraft, setNameDraft] = useState(session.name);
-  const [registrationAtDraft, setRegistrationAtDraft] = useState(() => toLocalDateTimeInput(session.registration_at));
+  const [eventDateDraft, setEventDateDraft] = useState(session.event_date || '');
+  const [registrationStartDraft, setRegistrationStartDraft] = useState(session.registration_start || '');
   const [venueDraft, setVenueDraft] = useState(session.venue || '');
+  const [venueField2Draft, setVenueField2Draft] = useState(session.venue_field2 || '');
   const [savingEventDetails, setSavingEventDetails] = useState(false);
   const [eventDetailsMessage, setEventDetailsMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -115,10 +109,12 @@ export function ManageSecuritySheet({
     setSavingEventDetails(true);
     setEventDetailsMessage(null);
     try {
-      const updated = await db.updateEventDetails(session.id, registrationAtDraft ? new Date(registrationAtDraft).toISOString() : null, venueDraft.trim() || null);
+      const updated = await db.updateEventDetails(session.id, eventDateDraft || null, registrationStartDraft.trim() || null, venueDraft.trim() || null, venueField2Draft.trim() || null);
       onSessionChange(updated);
-      setRegistrationAtDraft(toLocalDateTimeInput(updated.registration_at));
+      setEventDateDraft(updated.event_date || '');
+      setRegistrationStartDraft(updated.registration_start || '');
       setVenueDraft(updated.venue || '');
+      setVenueField2Draft(updated.venue_field2 || '');
       setEventDetailsMessage({ type: 'success', text: 'Event details updated.' });
     } catch {
       setEventDetailsMessage({ type: 'error', text: 'Could not update event details. Please try again.' });
@@ -165,10 +161,14 @@ export function ManageSecuritySheet({
         {!nameDraft.trim() && <div style={{ color: '#b42318', fontSize: 12, marginTop: 7 }}>Event name is required.</div>}
         {renameMessage && <div role="status" style={{ color: renameMessage.type === 'error' ? '#b42318' : 'oklch(0.45 0.14 152)', fontSize: 12.5, marginTop: 9 }}>{renameMessage.text}</div>}
 
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '22px 0 8px' }}>REGISTRATION DATE / TIME</div>
-        <input type="datetime-local" value={registrationAtDraft} onChange={event => { setRegistrationAtDraft(event.target.value); setEventDetailsMessage(null); }} aria-label="Registration date and time" style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 10, padding: '12px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }} />
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>EVENT DATE</div>
+        <input type="date" value={eventDateDraft} onChange={event => { setEventDateDraft(event.target.value); setEventDetailsMessage(null); }} aria-label="Event date" style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 10, padding: '12px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }} />
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>REGISTRATION START</div>
+        <input value={registrationStartDraft} onChange={event => { setRegistrationStartDraft(event.target.value); setEventDetailsMessage(null); }} placeholder="e.g. 3:15 PM" aria-label="Registration start" style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 10, padding: '12px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }} />
         <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>EVENT VENUE</div>
         <input value={venueDraft} onChange={event => { setVenueDraft(event.target.value); setEventDetailsMessage(null); }} placeholder="Event venue" aria-label="Event venue" style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 10, padding: '12px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }} />
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, letterSpacing: '0.14em', color: '#9a9a96', margin: '18px 0 8px' }}>VENUE FIELD 2</div>
+        <input value={venueField2Draft} onChange={event => { setVenueField2Draft(event.target.value); setEventDetailsMessage(null); }} placeholder="Venue field 2" aria-label="Venue field 2" style={{ width: '100%', border: '1px solid #dcdcd8', background: '#fff', borderRadius: 10, padding: '12px 13px', fontSize: 15, fontFamily: 'inherit', outline: 'none' }} />
         <button type="button" onClick={handleSaveEventDetails} disabled={savingEventDetails} style={{ width: '100%', height: 42, marginTop: 11, border: 'none', borderRadius: 9, background: savingEventDetails ? '#d8d8d4' : '#161618', color: savingEventDetails ? '#8a8a86' : '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: savingEventDetails ? 'default' : 'pointer' }}>{savingEventDetails ? 'Saving…' : 'Save event details'}</button>
         {eventDetailsMessage && <div role="status" style={{ marginTop: 8, color: eventDetailsMessage.type === 'error' ? '#b42318' : 'oklch(0.45 0.14 152)', fontSize: 12.5 }}>{eventDetailsMessage.text}</div>}
 

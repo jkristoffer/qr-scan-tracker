@@ -26,7 +26,10 @@ export async function migrate(options: MigrateOptions = {}) {
         archived boolean default false,
         manage_password_hash text,
         registration_at timestamptz,
-        venue text
+        event_date date,
+        registration_start text,
+        venue text,
+        venue_field2 text
       )
     `;
     await sql`
@@ -38,9 +41,12 @@ export async function migrate(options: MigrateOptions = {}) {
     await sql`
       alter table scan_sessions add column if not exists registration_at timestamptz
     `;
+    await sql`alter table scan_sessions add column if not exists event_date date`;
+    await sql`alter table scan_sessions add column if not exists registration_start text`;
     await sql`
       alter table scan_sessions add column if not exists venue text
     `;
+    await sql`alter table scan_sessions add column if not exists venue_field2 text`;
     await sql`
       create table if not exists items (
         id uuid primary key default gen_random_uuid(),

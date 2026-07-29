@@ -10,7 +10,7 @@ import type { AdmissionInput, AdmissionResult } from './admission';
 import { normalizeGuestTag } from './guestTags';
 
 let _client: SupabaseClient | null = null;
-const SESSION_COLUMNS = 'id,name,registration_at,venue,created_at,archived';
+const SESSION_COLUMNS = 'id,name,event_date,registration_start,venue,venue_field2,created_at,archived';
 const MANAGE_SESSION_COLUMNS = `${SESSION_COLUMNS},manage_password_hash`;
 
 function getClient(): SupabaseClient {
@@ -24,10 +24,10 @@ function getClient(): SupabaseClient {
 }
 
 export const db = {
-  async createSession(name: string, managePasswordHash: string, registrationAt: string | null, venue: string | null) {
+  async createSession(name: string, managePasswordHash: string, eventDate: string | null, registrationStart: string | null, venue: string | null, venueField2: string | null) {
     const { data, error } = await getClient()
       .from('scan_sessions')
-      .insert({ name, manage_password_hash: managePasswordHash, registration_at: registrationAt, venue })
+      .insert({ name, manage_password_hash: managePasswordHash, event_date: eventDate, registration_start: registrationStart, venue, venue_field2: venueField2 })
       .select(SESSION_COLUMNS)
       .single();
     if (error) throw error;
@@ -89,10 +89,10 @@ export const db = {
     return data;
   },
 
-  async updateEventDetails(id: string, registrationAt: string | null, venue: string | null) {
+  async updateEventDetails(id: string, eventDate: string | null, registrationStart: string | null, venue: string | null, venueField2: string | null) {
     const { data, error } = await getClient()
       .from('scan_sessions')
-      .update({ registration_at: registrationAt, venue })
+      .update({ event_date: eventDate, registration_start: registrationStart, venue, venue_field2: venueField2 })
       .eq('id', id)
       .select(MANAGE_SESSION_COLUMNS)
       .single();

@@ -6,8 +6,10 @@ import type { Item } from '@/lib/types';
 
 interface QrPostcardSheetProps {
   eventName: string;
-  registrationAt: string | null;
+  eventDate: string | null;
+  registrationStart: string | null;
   venue: string | null;
+  venueField2: string | null;
   item: Item;
   qrDataUrl: string;
   onClose: () => void;
@@ -27,7 +29,7 @@ function postcardFilename(eventName: string, guestName: string) {
   return `${stem || 'qr-entry-pass'}.png`;
 }
 
-export function QrPostcardSheet({ eventName, registrationAt, venue, item, qrDataUrl, onClose }: QrPostcardSheetProps) {
+export function QrPostcardSheet({ eventName, eventDate, registrationStart, venue, venueField2, item, qrDataUrl, onClose }: QrPostcardSheetProps) {
   const [asset, setAsset] = useState<PostcardAsset | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -41,7 +43,7 @@ export function QrPostcardSheet({ eventName, registrationAt, venue, item, qrData
     setError('');
     setMessage('');
 
-    void renderTicketPassImage(eventName, registrationAt, venue, item, qrDataUrl, 'image/png')
+    void renderTicketPassImage(eventName, eventDate, registrationStart, venue, venueField2, item, qrDataUrl, 'image/png')
       .then(blob => {
         if (cancelled) return;
         objectUrl = URL.createObjectURL(blob);
@@ -55,7 +57,7 @@ export function QrPostcardSheet({ eventName, registrationAt, venue, item, qrData
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [eventName, registrationAt, venue, item, qrDataUrl]);
+  }, [eventName, eventDate, registrationStart, venue, venueField2, item, qrDataUrl]);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
