@@ -96,14 +96,20 @@ export function Scanner({ sessionId: _sessionId, onScanComplete, onScanStart, on
         return;
       }
 
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      if (!ctx) { rafRef.current = requestAnimationFrame(scanLoop); return; }
-
-      ctx.drawImage(video, 0, 0, w, h);
-      const imageData = ctx.getImageData(0, 0, w, h);
-      const code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
+      let code: ReturnType<typeof jsQR> = null;
+      try {
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) { rafRef.current = requestAnimationFrame(scanLoop); return; }
+        ctx.drawImage(video, 0, 0, w, h);
+        const imageData = ctx.getImageData(0, 0, w, h);
+        code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
+      } catch {
+        // A transient camera/canvas frame failure must not stop the RAF loop.
+        rafRef.current = requestAnimationFrame(scanLoop);
+        return;
+      }
 
       if (code?.data) {
         noCodeSinceRef.current = null;

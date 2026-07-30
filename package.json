@@ -12,7 +12,8 @@
     "test:qr-email-live": "node scripts/test-qr-email-live.mjs",
     "test:offline-contract": "node scripts/test-offline-contract.mjs",
     "test:peer-signal-contract": "node scripts/test-peer-signal-contract.mjs",
-    "test:qr-sync-contract": "node scripts/test-qr-sync-contract.mjs"
+    "test:qr-sync-contract": "node scripts/test-qr-sync-contract.mjs",
+    "test:hardening": "tsx scripts/test-production-hardening.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",

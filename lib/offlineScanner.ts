@@ -9,7 +9,12 @@ export interface ConflictNotice { attemptId: string; sessionId: string; itemId: 
 const DB = 'gate-scanner-offline';
 const VERSION = 1;
 const open = (): Promise<IDBDatabase> => new Promise((resolve, reject) => {
+  if (typeof indexedDB === 'undefined') {
+    reject(new Error('Offline storage is unavailable'));
+    return;
+  }
   const request = indexedDB.open(DB, VERSION);
+  let blocked = false;
   request.onupgradeneeded = () => {
     const db = request.result;
     db.createObjectStore('snapshots', { keyPath: 'session.id' });
@@ -19,7 +24,17 @@ const open = (): Promise<IDBDatabase> => new Promise((resolve, reject) => {
     conflicts.createIndex('sessionId', 'sessionId');
     db.createObjectStore('meta', { keyPath: 'key' });
   };
-  request.onsuccess = () => resolve(request.result);
+  request.onsuccess = () => {
+    if (blocked) {
+      request.result.close();
+      return;
+    }
+    resolve(request.result);
+  };
+  request.onblocked = () => {
+    blocked = true;
+    reject(new Error('Offline storage is blocked by another tab'));
+  };
   request.onerror = () => reject(request.error);
 });
 const request = <T>(value: IDBRequest<T>) => new Promise<T>((resolve, reject) => { value.onsuccess = () => resolve(value.result); value.onerror = () => reject(value.error); });

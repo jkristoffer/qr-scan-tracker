@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { hashManagePin, isValidManagePin, manageAccessStorageKey, verifyManagePin } from '@/lib/managePassword';
 import { db } from '@/lib/supabase';
 import { ManageSession } from '@/lib/types';
+import { removeBrowserStorage, writeBrowserStorage } from '@/lib/browserStorage';
 
 interface ManageSecuritySheetProps {
   session: ManageSession;
@@ -88,12 +89,12 @@ export function ManageSecuritySheet({
       const nextHash = await hashManagePin(nextPin);
       const updated = await db.changeManagePassword(session.id, session.manage_password_hash, nextHash);
       if (!updated) {
-        sessionStorage.removeItem(manageAccessStorageKey(session.id));
+        removeBrowserStorage('session', manageAccessStorageKey(session.id));
         onLock();
         return;
       }
 
-      sessionStorage.setItem(manageAccessStorageKey(session.id), nextHash);
+      writeBrowserStorage('session', manageAccessStorageKey(session.id), nextHash);
       onSessionChange(updated);
       setCurrentPin('');
       setNextPin('');

@@ -21,6 +21,10 @@ function SyncQrCamera({ onCode, onError }: { onCode: (value: string) => void; on
     let active = true;
     let stream: MediaStream | null = null;
     let frame = 0;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      onError('Camera access is unavailable in this browser.');
+      return;
+    }
     const scan = () => {
       if (!active) return;
       const video = videoRef.current;
@@ -45,7 +49,9 @@ function SyncQrCamera({ onCode, onError }: { onCode: (value: string) => void; on
       videoRef.current.srcObject = media;
       await videoRef.current.play();
       frame = requestAnimationFrame(scan);
-    }).catch(error => onError(error?.message || 'Camera unavailable.'));
+    }).catch(error => {
+      if (active) onError(error?.message || 'Camera unavailable.');
+    });
     return () => { active = false; cancelAnimationFrame(frame); stream?.getTracks().forEach(track => track.stop()); };
   }, [onCode, onError]);
 
@@ -66,11 +72,16 @@ export function QrOfflineSyncSheet({ sessionId, onImported, onClose }: QrOffline
   const totalPages = Math.max(1, Math.ceil(attempts.length / QR_SYNC_BATCH_SIZE));
 
   const showExport = useCallback(async () => {
-    const pending = await offlineScanner.pending(sessionId);
-    setAttempts(pending);
-    setPage(1);
-    setMode('show');
-    setMessage('');
+    try {
+      const pending = await offlineScanner.pending(sessionId);
+      setAttempts(pending);
+      setPage(1);
+      setMode('show');
+      setMessage('');
+    } catch {
+      setMessage('Offline storage is unavailable on this device.');
+      setMode('home');
+    }
   }, [sessionId]);
 
   useEffect(() => {

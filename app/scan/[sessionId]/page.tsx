@@ -13,6 +13,7 @@ import { admitKnownItem, flushAdmissions } from '@/lib/admission';
 import { offlineScanner, type PreparedScanner } from '@/lib/offlineScanner';
 import { PeerSync, type PeerSignalState, type PeerState } from '@/lib/peerSync';
 import { QrOfflineSyncSheet } from '@/components/QrOfflineSyncSheet';
+import { readBrowserStorage } from '@/lib/browserStorage';
 
 type UndoCandidate = { itemId: string; name: string; barcode: string; scannedAt: string; source: CheckInSource };
 
@@ -47,6 +48,8 @@ export default function ScannerPage() {
   const { setItems, updateItem, progress, setLastScan } = useScanStore();
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [loadVersion, setLoadVersion] = useState(0);
   const [sessionName, setSessionName] = useState('');
   const [gateName, setGateName] = useState('This gate');
   const [isConnected, setIsConnected] = useState(false);
@@ -78,30 +81,58 @@ export default function ScannerPage() {
   const [pairingBusy, setPairingBusy] = useState(false);
 
   useEffect(() => {
-    const name = localStorage.getItem('gate_name');
+    const name = readBrowserStorage('local', 'gate_name');
     if (name) setGateName(name);
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
+      setLoading(true);
+      setLoadError('');
+      let loaded = false;
       try {
         const session = await db.getSession(sessionId);
+        if (cancelled) return;
         setSessionName(session.name);
         const items = await db.getItems(sessionId);
+        if (cancelled) return;
         setItems(items);
+        loaded = true;
       } catch {
+        try {
+          const snapshot = await offlineScanner.get(sessionId);
+          if (cancelled) return;
+          if (snapshot) {
+            setSessionName(snapshot.session.name);
+            setItems(snapshot.items as any);
+            loaded = true;
+          }
+        } catch {
+          // IndexedDB can be denied or unavailable. A connected scanner can
+          // recover on retry without taking down the route.
+        }
+      }
+
+      try {
         const snapshot = await offlineScanner.get(sessionId);
-        if (!snapshot) { router.push('/'); return; }
-        setSessionName(snapshot.session.name);
-        setItems(snapshot.items as any);
+        const pending = await offlineScanner.pending(sessionId);
+        if (!cancelled) {
+          setPrepared(snapshot);
+          setPendingSync(pending.length);
+        }
+      } catch {
+        if (!cancelled) setOfflineMessage('Offline storage is unavailable on this device. Connected scanning can continue.');
       } finally {
-        const snapshot = await offlineScanner.get(sessionId); setPrepared(snapshot);
-        setPendingSync((await offlineScanner.pending(sessionId)).length);
-        setLoading(false);
+        if (!cancelled) {
+          if (!loaded) setLoadError('Could not load this event from the network or this device.');
+          setLoading(false);
+        }
       }
     };
-    load();
-  }, [sessionId, router, setItems]);
+    void load();
+    return () => { cancelled = true; };
+  }, [sessionId, setItems, loadVersion]);
 
   const refreshOfflineStatus = useCallback(async () => {
     setPrepared(await offlineScanner.get(sessionId));
@@ -111,9 +142,13 @@ export default function ScannerPage() {
 
   const sync = useCallback(async () => {
     if (!navigator.onLine) return;
-    const results = await flushAdmissions(sessionId);
-    for (const entry of results) if (entry.item) updateItem(entry.item);
-    await refreshOfflineStatus();
+    try {
+      const results = await flushAdmissions(sessionId);
+      for (const entry of results) if (entry.item) updateItem(entry.item);
+      await refreshOfflineStatus();
+    } catch {
+      setOfflineMessage('Queued check-ins could not sync yet. They remain saved on this device.');
+    }
   }, [refreshOfflineStatus, sessionId, updateItem]);
 
   useEffect(() => {
@@ -128,13 +163,17 @@ export default function ScannerPage() {
       onSignalState: setPeerSignalState,
       onAdmission: entry => {
         void (async () => {
-          const applied = await offlineScanner.applyPeerAdmission(entry);
-          if (applied !== 'applied') return;
-          const snapshot = await offlineScanner.get(sessionId);
-          const item = snapshot?.items.find(candidate => candidate.id === entry.itemId);
-          if (item) updateItem(item as any);
-          await refreshOfflineStatus();
-          if (navigator.onLine) await sync();
+          try {
+            const applied = await offlineScanner.applyPeerAdmission(entry);
+            if (applied !== 'applied') return;
+            const snapshot = await offlineScanner.get(sessionId);
+            const item = snapshot?.items.find(candidate => candidate.id === entry.itemId);
+            if (item) updateItem(item as any);
+            await refreshOfflineStatus();
+            if (navigator.onLine) await sync();
+          } catch {
+            setPairingMessage('Could not save a nearby-gate check-in on this device.');
+          }
         })();
       },
     });
@@ -257,7 +296,13 @@ export default function ScannerPage() {
   };
 
   const admit = useCallback(async (barcode: string, source: 'camera' | 'manual') => {
-    const snapshot = await offlineScanner.get(sessionId);
+    let snapshot: PreparedScanner | null = null;
+    try {
+      snapshot = await offlineScanner.get(sessionId);
+    } catch {
+      // Continue through the connected database path when local storage is
+      // unavailable; admitKnownItem also falls back to direct reconciliation.
+    }
     let item = snapshot?.items.find(candidate => candidate.barcode === barcode) as any;
     if (!item && navigator.onLine) item = await db.getItemByBarcode(sessionId, barcode);
     if (!item) return { success: false, message: snapshot ? 'Not found' : 'Reconnect and prepare this event before offline scanning.', type: 'not_found' as const };
@@ -350,6 +395,21 @@ export default function ScannerPage() {
       <div style={{ minHeight: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: '#5a5a5e' }}>LOADING…</div>
       </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <main style={{ minHeight: '100vh', background: '#0b0b0d', color: '#f5f5f2', display: 'grid', placeItems: 'center', padding: 24, fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+        <section role="alert" style={{ width: '100%', maxWidth: 420, border: '1px solid #343438', borderRadius: 16, background: '#161618', padding: 24, textAlign: 'center' }}>
+          <h1 style={{ margin: '0 0 8px', fontSize: 22 }}>Event unavailable</h1>
+          <p style={{ margin: 0, color: '#b4b4b0', fontSize: 14, lineHeight: 1.5 }}>{loadError} Check the connection, then retry.</p>
+          <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+            <button type="button" onClick={() => setLoadVersion(value => value + 1)} style={{ flex: 1, height: 44, border: 0, borderRadius: 10, background: '#fff', color: '#161618', fontWeight: 700 }}>Retry</button>
+            <button type="button" onClick={() => router.push('/')} style={{ flex: 1, height: 44, border: '1px solid #4a4a4e', borderRadius: 10, background: 'transparent', color: '#fff', fontWeight: 700 }}>Events</button>
+          </div>
+        </section>
+      </main>
     );
   }
 

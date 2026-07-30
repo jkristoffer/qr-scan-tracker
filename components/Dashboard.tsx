@@ -10,6 +10,7 @@ import { distinctGuestTags } from '@/lib/guestTags';
 import { VipToggle } from '@/components/VipToggle';
 import { StaffToggle } from '@/components/StaffToggle';
 import { InstallScanner } from '@/components/InstallScanner';
+import { readBrowserStorage, writeBrowserStorage } from '@/lib/browserStorage';
 
 interface EventProgress { total: number; scanned: number; }
 
@@ -88,6 +89,8 @@ export function Dashboard() {
   const [manualGuests, setManualGuests] = useState<GuestInput[]>([{ id: 1, name: '', email: '', tag: '', isVIP: false, isStaff: false }]);
   const [creationError, setCreationError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const [loadVersion, setLoadVersion] = useState(0);
   const [gateName, setGateName] = useState('');
   const router = useRouter();
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -115,22 +118,28 @@ export function Dashboard() {
   const creationBlocked = creating || hasGuestErrors || exceedsGuestLimit || !managePinValid || !managePinsMatch;
 
   useEffect(() => {
-    const stored = localStorage.getItem('gate_name');
+    const stored = readBrowserStorage('local', 'gate_name');
     setGateName(stored ?? 'Main Gate');
   }, []);
 
   const handleGateNameChange = (val: string) => {
     setGateName(val);
-    localStorage.setItem('gate_name', val);
+    writeBrowserStorage('local', 'gate_name', val);
   };
 
   useEffect(() => {
+    let cancelled = false;
+    setListError(null);
     db.listSessions().then(async (list) => {
+      if (cancelled) return;
       setSessions(list);
       const prog = await db.getSessionsProgress(list.map(s => s.id));
-      setProgress(prog);
-    }).catch(console.error);
-  }, []);
+      if (!cancelled) setProgress(prog);
+    }).catch(() => {
+      if (!cancelled) setListError('Could not load events. Check your connection and retry.');
+    });
+    return () => { cancelled = true; };
+  }, [loadVersion]);
 
   useEffect(() => {
     if (tab !== 'archived') return;
@@ -139,26 +148,38 @@ export function Dashboard() {
       const prog = await db.getSessionsProgress(list.map(s => s.id));
       setProgress(prev => ({ ...prev, ...prog }));
     }).catch(console.error);
-  }, [tab]);
+  }, [tab, loadVersion]);
 
   const handleUnarchive = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    const updated = await db.unarchiveSession(id);
-    setArchivedSessions(prev => prev.filter(s => s.id !== id));
-    setSessions(prev => [updated, ...prev]);
+    setListError(null);
+    try {
+      const updated = await db.unarchiveSession(id);
+      setArchivedSessions(prev => prev.filter(s => s.id !== id));
+      setSessions(prev => [updated, ...prev]);
+    } catch {
+      setListError('Could not restore that event. Please try again.');
+    }
   };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     const requestId = ++uploadRequestId.current;
-    const guests = parseGuestRows(await f.text());
-    if (requestId !== uploadRequestId.current) return;
-    setCsvFile(f);
-    setUploadedGuests(guests);
-    setUploadLabel({ title: `${guests.length} guests loaded`, sub: 'Tap to replace · CSV or TXT' });
-    setCreationError(null);
-    if (!newName) setNewName(f.name.replace(/\.[^.]+$/, ''));
+    try {
+      const guests = parseGuestRows(await f.text());
+      if (requestId !== uploadRequestId.current) return;
+      setCsvFile(f);
+      setUploadedGuests(guests);
+      setUploadLabel({ title: `${guests.length} guests loaded`, sub: 'Tap to replace · CSV or TXT' });
+      setCreationError(null);
+      if (!newName) setNewName(f.name.replace(/\.[^.]+$/, ''));
+    } catch {
+      if (requestId === uploadRequestId.current) {
+        clearUpload();
+        setCreationError('Could not read that guest list. Try another CSV or TXT file.');
+      }
+    }
   };
 
   const clearUpload = () => {
@@ -250,6 +271,12 @@ export function Dashboard() {
 
         {/* Event list */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px 120px' }}>
+          {listError && (
+            <div role="alert" style={{ margin: '0 6px 14px', padding: 12, border: '1px solid #f0c8c3', borderRadius: 10, background: '#fff7f6', color: '#9d2f25', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <span>{listError}</span>
+              <button type="button" onClick={() => setLoadVersion(value => value + 1)} style={{ border: 0, background: 'transparent', color: '#9d2f25', fontWeight: 800, cursor: 'pointer' }}>Retry</button>
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 6px 12px' }}>
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: '0.2em', color: '#9a9a96' }}>
               YOUR EVENTS

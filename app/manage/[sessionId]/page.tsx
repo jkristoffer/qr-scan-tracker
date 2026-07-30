@@ -27,6 +27,7 @@ import {
   UNTAGGED_TAG_KEY,
 } from '@/lib/manageFilters';
 import { Item, ManageSession } from '@/lib/types';
+import { readBrowserStorage, removeBrowserStorage } from '@/lib/browserStorage';
 
 interface GuestCard {
   item: Item;
@@ -208,7 +209,7 @@ export default function ManagePage() {
         if (!existing) {
           void toQrDataUrl(item.barcode).then(dataUrl => {
             setCards(current => current.some(card => card.item.id === item.id) ? current : [...current, { item, dataUrl }]);
-          });
+          }).catch(() => undefined);
           return prev;
         }
         if (existing.item.barcode !== item.barcode) {
@@ -234,7 +235,7 @@ export default function ManagePage() {
         const manageSession = await db.getManageSession(sessionId);
         if (cancelled) return;
         setSession(manageSession);
-        const storedAccess = sessionStorage.getItem(manageAccessStorageKey(sessionId));
+        const storedAccess = readBrowserStorage('session', manageAccessStorageKey(sessionId));
         const unlocked = Boolean(manageSession.manage_password_hash && storedAccess === manageSession.manage_password_hash);
         if (unlocked) setLoadingData(true);
         setAccessState(unlocked ? 'unlocked' : 'locked');
@@ -427,7 +428,7 @@ export default function ManagePage() {
   };
 
   const handleLock = () => {
-    sessionStorage.removeItem(manageAccessStorageKey(sessionId));
+    removeBrowserStorage('session', manageAccessStorageKey(sessionId));
     setSettingsOpen(false);
     setCards([]);
     setActiveScanners([]);

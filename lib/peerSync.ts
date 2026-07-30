@@ -18,7 +18,16 @@ const decode = (code: string): Signal => {
 async function waitForIceComplete(connection: RTCPeerConnection) {
   if (connection.iceGatheringState === 'complete') return;
   await new Promise<void>(resolve => {
-    const done = () => { if (connection.iceGatheringState === 'complete') { connection.removeEventListener('icegatheringstatechange', done); resolve(); } };
+    let finished = false;
+    const timeout = setTimeout(() => finish(), 8_000);
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeout);
+      connection.removeEventListener('icegatheringstatechange', done);
+      resolve();
+    };
+    const done = () => { if (connection.iceGatheringState === 'complete') finish(); };
     connection.addEventListener('icegatheringstatechange', done);
   });
 }
@@ -107,7 +116,12 @@ export class PeerSync {
     if (this.channel?.readyState === 'open') this.channel.send(JSON.stringify({ type: 'admission', admission } satisfies PeerMessage));
   }
   private sendAutoSignal(signal: AutoSignal) {
-    void this.signalChannel?.send({ type: 'broadcast', event: 'signal', payload: signal });
+    const broadcast = this.signalChannel?.send({ type: 'broadcast', event: 'signal', payload: signal });
+    if (broadcast && typeof broadcast.catch === 'function') {
+      void broadcast.catch(() => {
+        if (this.autoPairing) this.onSignalState('retrying');
+      });
+    }
     void db.publishPeerSignal(this.sessionId, signal).catch(() => {
       if (this.autoPairing) this.onSignalState('retrying');
     });
@@ -145,13 +159,17 @@ export class PeerSync {
   private connectSignaling() {
     if (!this.autoPairing || this.signalChannel) return;
     this.onSignalState('connecting');
-    const channel = db.joinPeerSignaling(this.sessionId, payload => { void this.receiveAutoSignal(payload); });
+    const channel = db.joinPeerSignaling(this.sessionId, payload => {
+      void this.receiveAutoSignal(payload).catch(() => {
+        if (this.autoPairing) this.onSignalState('retrying');
+      });
+    });
     this.signalChannel = channel;
     channel.subscribe((status: string) => {
       if (channel !== this.signalChannel || !this.autoPairing) return;
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         this.signalChannel = null;
-        void channel.unsubscribe();
+        void channel.unsubscribe().catch(() => undefined);
         return;
       }
       if (status !== 'SUBSCRIBED') return;
@@ -200,7 +218,7 @@ export class PeerSync {
     this.signalPollTimer = null;
     const channel = this.signalChannel;
     this.signalChannel = null;
-    channel?.unsubscribe();
+    void channel?.unsubscribe().catch(() => undefined);
     this.onSignalState('idle');
   }
   cancelAutoPairing() {

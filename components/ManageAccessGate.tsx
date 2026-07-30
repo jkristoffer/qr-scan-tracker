@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { hashManagePin, isValidManagePin, manageAccessStorageKey, verifyManagePin } from '@/lib/managePassword';
 import { db } from '@/lib/supabase';
 import { ManageSession } from '@/lib/types';
+import { writeBrowserStorage } from '@/lib/browserStorage';
 
 interface ManageAccessGateProps {
   session: ManageSession;
@@ -23,7 +24,7 @@ export function ManageAccessGate({ session, onSessionChange, onUnlock }: ManageA
   const matches = pin === confirmation;
 
   const finishUnlock = (unlockedSession: ManageSession) => {
-    sessionStorage.setItem(manageAccessStorageKey(session.id), unlockedSession.manage_password_hash!);
+    writeBrowserStorage('session', manageAccessStorageKey(session.id), unlockedSession.manage_password_hash!);
     onSessionChange(unlockedSession);
     onUnlock();
   };

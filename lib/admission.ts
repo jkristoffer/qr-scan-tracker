@@ -12,7 +12,14 @@ function result(item: Item, state: AdmissionSyncState, type: ScanResult['type'] 
 
 export async function admitKnownItem(item: Item, input: Omit<AdmissionInput, 'itemId' | 'attemptId' | 'capturedAt'>, onQueued?: (attempt: QueuedAdmission) => void): Promise<ScanResult> {
   const attempt: QueuedAdmission = { ...input, itemId: item.id, attemptId: uuid(), capturedAt: new Date().toISOString(), state: 'pending' };
-  const queued = await offlineScanner.queueAdmission(attempt);
+  let queued = false;
+  try {
+    queued = await offlineScanner.queueAdmission(attempt);
+  } catch {
+    if (!navigator.onLine) {
+      return { success: false, message: 'Offline storage is unavailable on this device. Reconnect before scanning.', type: 'not_found' };
+    }
+  }
   if (queued) onQueued?.(attempt);
   if (!queued) {
     if (!navigator.onLine) return item.scanned ? result(item, 'confirmed', 'duplicate', `Already checked in${item.scanned_by ? ` · ${item.scanned_by}` : ''}`) : { success: false, message: 'Prepare this event while connected before scanning offline.', type: 'not_found' };
