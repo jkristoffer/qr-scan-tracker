@@ -64,17 +64,36 @@ type ServiceWorkerHandlers = {
   activate?: (event: ExtendableEvent) => void;
 };
 
-function serviceWorkerHarness(failPaths: Set<string>) {
+const launcherHtml = [
+  '<link rel="stylesheet" href="/_next/static/chunks/app.css">',
+  '<script src="/_next/static/chunks/runtime.js"></script>',
+  '<script src="https://cdn.example/external.js"></script>',
+].join('');
+
+function serviceWorkerHarness({
+  failPaths = new Set<string>(),
+  launcherStatus = 200,
+  html = launcherHtml,
+}: {
+  failPaths?: Set<string>;
+  launcherStatus?: number;
+  html?: string;
+} = {}) {
   const handlers: ServiceWorkerHandlers = {};
   const deletedCaches: string[] = [];
+  const addedPaths: string[] = [];
+  const storedPaths: string[] = [];
   const cache = {
     async add(path: string) {
       if (failPaths.has(path)) throw new Error(`Could not cache ${path}`);
+      addedPaths.push(path);
     },
     async addAll(paths: string[]) {
       await Promise.all(paths.map(path => cache.add(path)));
     },
-    async put() {},
+    async put(path: string) {
+      storedPaths.push(path);
+    },
   };
   const context = {
     self: {
@@ -88,13 +107,16 @@ function serviceWorkerHarness(failPaths: Set<string>) {
       async match() { return undefined; },
       async delete(key: string) { deletedCaches.push(key); return true; },
     },
-    fetch: async () => { throw new Error('not used'); },
+    fetch: async (path: string) => {
+      if (path !== '/offline-scanner') throw new Error(`Unexpected fetch ${path}`);
+      return new Response(html, { status: launcherStatus });
+    },
     location: { origin: 'https://scanner.example' },
     URL,
     Response,
   };
   vm.runInNewContext(readFileSync('public/scanner-sw.js', 'utf8'), context);
-  return { handlers, deletedCaches };
+  return { handlers, deletedCaches, addedPaths, storedPaths };
 }
 
 async function runExtendableHandler(handler: ((event: ExtendableEvent) => void) | undefined) {
@@ -105,12 +127,26 @@ async function runExtendableHandler(handler: ((event: ExtendableEvent) => void) 
   await pending;
 }
 
-const failedEssential = serviceWorkerHarness(new Set(['/offline-scanner']));
-await assert.rejects(runExtendableHandler(failedEssential.handlers.install), /Could not cache/);
+const failedLauncher = serviceWorkerHarness({ launcherStatus: 503 });
+await assert.rejects(runExtendableHandler(failedLauncher.handlers.install), /Offline launcher request failed/);
 
-const failedOptional = serviceWorkerHarness(new Set(['/scanner-icon-512.svg']));
+const failedDependency = serviceWorkerHarness({ failPaths: new Set(['/_next/static/chunks/runtime.js']) });
+await assert.rejects(runExtendableHandler(failedDependency.handlers.install), /Could not cache/);
+assert.deepEqual(failedDependency.storedPaths, []);
+
+const failedOptional = serviceWorkerHarness({ failPaths: new Set(['/scanner-icon-512.svg']) });
 await runExtendableHandler(failedOptional.handlers.install);
 await runExtendableHandler(failedOptional.handlers.activate);
+assert.deepEqual(
+  [...failedOptional.addedPaths].sort(),
+  [
+    '/_next/static/chunks/app.css',
+    '/_next/static/chunks/runtime.js',
+    '/manifest.webmanifest',
+    '/scanner-icon-192.svg',
+  ].sort(),
+);
+assert.deepEqual(failedOptional.storedPaths, ['/offline-scanner']);
 assert.deepEqual(failedOptional.deletedCaches, []);
 
 const routeBoundary = readFileSync('app/error.tsx', 'utf8');
