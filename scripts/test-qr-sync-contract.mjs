@@ -21,6 +21,9 @@ if (!storage.includes("if (item.scanned) {\n        queue.put(entry);\n        r
 if (!sheet.includes('offlineScanner.applyPeerAdmission(attempt)') || !sheet.includes('No internet or hotspot required')) {
   throw new Error('QR sync sheet must import immutable attempts and explain its offline boundary.');
 }
+if (!/try\s*\{[\s\S]*context\.drawImage\([\s\S]*context\.getImageData\([\s\S]*jsQR\([\s\S]*\}\s*catch\s*\{[\s\S]*Keep scanning after a transient frame\/canvas failure\./.test(sheet)) {
+  throw new Error('QR sync camera must contain transient frame and canvas failures.');
+}
 if (!scanner.includes('!qrSyncOpen && <Scanner') || !scanner.includes('<QrOfflineSyncSheet')) {
   throw new Error('The ticket camera must pause while the QR sync camera is open.');
 }

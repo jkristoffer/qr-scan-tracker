@@ -30,14 +30,19 @@ function SyncQrCamera({ onCode, onError }: { onCode: (value: string) => void; on
       const video = videoRef.current;
       const canvas = canvasRef.current;
       if (video && canvas && video.readyState >= 2 && video.videoWidth && video.videoHeight) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const context = canvas.getContext('2d', { willReadFrequently: true });
-        if (context) {
-          context.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const image = context.getImageData(0, 0, canvas.width, canvas.height);
-          const code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'attemptBoth' });
-          if (code?.data) { active = false; onCode(code.data); return; }
+        try {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const context = canvas.getContext('2d', { willReadFrequently: true });
+          if (context) {
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const image = context.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'attemptBoth' });
+            if (code?.data) { active = false; onCode(code.data); return; }
+          }
+        } catch {
+          // Camera dimensions can change between readiness checks and canvas
+          // reads. Keep scanning after a transient frame/canvas failure.
         }
       }
       frame = requestAnimationFrame(scan);
