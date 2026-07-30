@@ -1,14 +1,13 @@
 const CACHE = 'gate-scanner-v2';
-const PRECACHE = ['/offline-scanner', '/manifest.webmanifest', '/scanner-icon-192.svg', '/scanner-icon-512.svg'];
+const ESSENTIAL = ['/offline-scanner'];
+const OPTIONAL = ['/manifest.webmanifest', '/scanner-icon-192.svg', '/scanner-icon-512.svg'];
 self.addEventListener('install', event => event.waitUntil(
-  caches.open(CACHE).then(cache => Promise.allSettled(PRECACHE.map(path => cache.add(path))))
+  caches.open(CACHE).then(async cache => {
+    await cache.addAll(ESSENTIAL);
+    await Promise.allSettled(OPTIONAL.map(path => cache.add(path)));
+  })
 ));
-self.addEventListener('activate', event => event.waitUntil(
-  Promise.all([
-    self.clients.claim(),
-    caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('gate-scanner-') && key !== CACHE).map(key => caches.delete(key)))),
-  ])
-));
+self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', event => {
   const request = event.request; const url = new URL(request.url);
   const scannerNavigation = request.mode === 'navigate' && (url.pathname.startsWith('/scan/') || url.pathname === '/offline-scanner');
