@@ -159,6 +159,7 @@ export default function ManagePage() {
   const [addGuestOpen, setAddGuestOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('active');
   const [filterState, setFilterState] = useState<ManageFilterState>(() => createDefaultManageFilterState());
+  const [guestNameQuery, setGuestNameQuery] = useState('');
   const [addName, setAddName] = useState('');
   const [addEmail, setAddEmail] = useState('');
   const [addTag, setAddTag] = useState('');
@@ -488,10 +489,12 @@ export default function ManagePage() {
   ];
   const filteredActive = filterManageItems(activeCards.map(card => card.item), filterState);
   const filteredRemoved = filterManageItems(removedCards.map(card => card.item), filterState);
+  const normalizedGuestNameQuery = guestNameQuery.trim().toLocaleLowerCase();
+  const matchesGuestName = (item: Item) => !normalizedGuestNameQuery || item.name.toLocaleLowerCase().includes(normalizedGuestNameQuery);
   const activeCardById = new Map(activeCards.map(card => [card.item.id, card]));
   const removedCardById = new Map(removedCards.map(card => [card.item.id, card]));
-  const displayActive = sortedGuestCards(filteredActive.map(item => activeCardById.get(item.id)!), filterState, pinnedId);
-  const displayRemoved = sortedGuestCards(filteredRemoved.map(item => removedCardById.get(item.id)!), filterState, pinnedId);
+  const displayActive = sortedGuestCards(filteredActive.filter(matchesGuestName).map(item => activeCardById.get(item.id)!), filterState, pinnedId);
+  const displayRemoved = sortedGuestCards(filteredRemoved.filter(matchesGuestName).map(item => removedCardById.get(item.id)!), filterState, pinnedId);
   const visibleCards = tab === 'active' ? displayActive : displayRemoved;
   const visibleGuestIds = new Set(visibleCards.map(card => card.item.id));
   const selectedVisibleIds = [...selectedGuestIds].filter(id => visibleGuestIds.has(id));
@@ -514,6 +517,7 @@ export default function ManagePage() {
   };
 
   const activeFilterCount = countManageFilterSelections(filterState);
+  const hasActiveViewFilters = activeFilterCount > 0 || normalizedGuestNameQuery.length > 0;
   const sortLabel = filterState.sort === 'checked_in' ? 'Checked in' : filterState.sort === 'tag' ? 'Tag' : 'Added';
 
   const toggleGuestSelection = (id: string) => {
@@ -672,6 +676,20 @@ export default function ManagePage() {
               REMOVED GUESTS
             </div>
           )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flex: '1 1 190px', minWidth: 180 }}>
+            <input
+              value={guestNameQuery}
+              onChange={event => { setGuestNameQuery(event.target.value); setSelectedGuestIds(new Set()); }}
+              placeholder="Search by name…"
+              aria-label="Search guests by name"
+              style={{ width: '100%', height: 32, boxSizing: 'border-box', border: '1px solid #dcdcd8', borderRadius: 8, background: '#fff', padding: '0 10px', color: '#161618', fontSize: 12, fontFamily: 'inherit', outline: 'none' }}
+            />
+            {guestNameQuery && (
+              <button type="button" onClick={() => { setGuestNameQuery(''); setSelectedGuestIds(new Set()); }} aria-label="Clear name search" style={{ flexShrink: 0, width: 28, height: 28, border: 'none', background: 'transparent', color: '#777773', fontSize: 18, cursor: 'pointer' }}>
+                ×
+              </button>
+            )}
+          </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, flexWrap: 'wrap' }}>
             <button
               type="button"
@@ -712,7 +730,7 @@ export default function ManagePage() {
         <div className="no-print" style={{ padding: bulkTagMode ? '10px 12px 230px' : '10px 12px 40px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {displayActive.length === 0 && (
             <div style={{ textAlign: 'center', padding: '48px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#b4b4b0', letterSpacing: '0.1em' }}>
-              {activeFilterCount > 0 ? 'NO MATCHING GUESTS' : 'NO GUESTS YET'}
+              {hasActiveViewFilters ? 'NO MATCHING GUESTS' : 'NO GUESTS YET'}
             </div>
           )}
           {displayActive.map(card => {
@@ -814,7 +832,7 @@ export default function ManagePage() {
         <div className="no-print" style={{ padding: bulkTagMode ? '10px 12px 230px' : '10px 12px 40px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {displayRemoved.length === 0 && (
             <div style={{ textAlign: 'center', padding: '48px 16px', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#b4b4b0', letterSpacing: '0.1em' }}>
-              {activeFilterCount > 0 ? 'NO MATCHING REMOVED GUESTS' : 'NO REMOVED GUESTS'}
+              {hasActiveViewFilters ? 'NO MATCHING REMOVED GUESTS' : 'NO REMOVED GUESTS'}
             </div>
           )}
           {displayRemoved.map(card => (
