@@ -182,6 +182,8 @@ export default function ManagePage() {
   const [bulkDownloadProgress, setBulkDownloadProgress] = useState<number | null>(null);
   const [bulkDownloadTotal, setBulkDownloadTotal] = useState(0);
   const [bulkDownloadError, setBulkDownloadError] = useState<string | null>(null);
+  const [csvDownloading, setCsvDownloading] = useState(false);
+  const [csvDownloadError, setCsvDownloadError] = useState<string | null>(null);
   const [bulkTagMode, setBulkTagMode] = useState(false);
   const [selectedGuestIds, setSelectedGuestIds] = useState<Set<string>>(new Set());
   const [bulkTag, setBulkTag] = useState('');
@@ -595,6 +597,33 @@ export default function ManagePage() {
     }
   };
 
+  const handleCsvDownload = async () => {
+    if (csvDownloading || activeCards.length === 0) return;
+    setCsvDownloading(true);
+    setCsvDownloadError(null);
+    try {
+      const response = await fetch(`/api/export/${encodeURIComponent(sessionId)}`);
+      if (!response.ok) throw new Error('Guest list export failed');
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const disposition = response.headers.get('Content-Disposition');
+      const filename = disposition?.match(/filename="([^"]+)"/)?.[1] || 'guest-list.csv';
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setActionMessage(`Downloaded the guest list CSV for ${activeCards.length} active guest${activeCards.length === 1 ? '' : 's'}.`);
+    } catch {
+      setCsvDownloadError('Could not download the guest list CSV. Please try again.');
+    } finally {
+      setCsvDownloading(false);
+    }
+  };
+
   return (
     <div style={{ minHeight: '100vh', background: '#fbfbfa', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", color: '#161618' }}>
 
@@ -639,6 +668,15 @@ export default function ManagePage() {
             {bulkDownloadProgress !== null
               ? `Preparing ${bulkDownloadProgress}/${bulkDownloadTotal}`
               : visibleCards.length === 1 ? 'Download pass' : 'Download passes'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleCsvDownload()}
+            disabled={csvDownloading || activeCards.length === 0}
+            aria-label="Download guest list CSV"
+            style={{ flexShrink: 0, padding: '9px 13px', background: csvDownloading || activeCards.length === 0 ? '#f0f0ed' : '#fff', color: csvDownloading || activeCards.length === 0 ? '#9a9a96' : '#4a4a46', border: '1px solid #dcdcd8', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: csvDownloading || activeCards.length === 0 ? 'default' : 'pointer', fontFamily: 'inherit' }}
+          >
+            {csvDownloading ? 'Preparing CSV…' : 'Download CSV'}
           </button>
         </div>
 
@@ -721,6 +759,11 @@ export default function ManagePage() {
         {bulkDownloadError && (
           <div role="alert" style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'oklch(0.96 0.06 32)', fontSize: 11.5, color: '#b42318' }}>
             {bulkDownloadError}
+          </div>
+        )}
+        {csvDownloadError && (
+          <div role="alert" style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'oklch(0.96 0.06 32)', fontSize: 11.5, color: '#b42318' }}>
+            {csvDownloadError}
           </div>
         )}
       </div>
